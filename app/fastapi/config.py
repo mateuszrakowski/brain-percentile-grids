@@ -38,11 +38,8 @@ class Settings(BaseSettings):
     # File upload settings
     max_upload_size: int = 16 * 1024 * 1024  # 16MB
     allowed_extensions: List[str] = ["csv", "xlsx", "xls"]
-
-    # Cache settings
-    persistent_cache_dir: str = "./cache"
-    persistent_cache_enabled: bool = True
-    cache_ttl: int = 3600  # 1 hour in seconds
+    max_files_count: int = 300
+    upload_folder: str = "./uploads"
 
     # R environment
     r_home: Optional[str] = None

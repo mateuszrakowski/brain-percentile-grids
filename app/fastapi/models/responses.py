@@ -84,7 +84,6 @@ class ReferenceCalculationResponse(BaseModel):
     successful_count: int
     failed_count: int
     total_time: float
-    cache_hits: int = 0
 
 
 class PatientResult(BaseModel):

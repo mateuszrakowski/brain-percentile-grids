@@ -36,6 +36,7 @@ async def get_validated_files(
     Validate uploaded files and return validated file objects.
 
     Checks:
+    - File count within limits
     - Filename present
     - File extension allowed
     - File size within limits
@@ -46,6 +47,13 @@ async def get_validated_files(
     """
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
+
+    # Check file count
+    if len(files) > settings.max_files_count:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Too many files. Maximum allowed: {settings.max_files_count}",
+        )
 
     validated = []
     for file in files:

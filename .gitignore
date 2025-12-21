@@ -48,6 +48,9 @@ htmlcov/
 .cache/
 cache/
 
+# Uploads
+uploads/
+
 # Logs
 *.log
 

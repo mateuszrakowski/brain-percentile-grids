@@ -9,7 +9,7 @@ from typing import Any, Dict
 from fastapi import APIRouter, Depends
 
 from app.fastapi.config import get_settings
-from app.fastapi.dependencies import get_cache_info, get_system_metrics
+from app.fastapi.dependencies import get_system_metrics
 from app.fastapi.models.responses import HealthResponse
 
 # Create router with prefix and tags
@@ -36,18 +36,14 @@ async def health_check():
 
 @router.get("/status")
 async def detailed_status(
-    cache_info: Dict = Depends(get_cache_info),
     system_metrics: Dict = Depends(get_system_metrics),
 ) -> Dict[str, Any]:
     """
     Detailed application status with metrics.
-
-    This demonstrates dependency injection in FastAPI.
     """
     return {
         "status": "operational",
         "timestamp": datetime.now().isoformat(),
-        "cache": cache_info,
         "system": system_metrics,
         "uptime": system_metrics.get("uptime", 0),
     }
@@ -62,7 +58,6 @@ async def readiness_check() -> Dict[str, bool | dict]:
     """
     checks = {
         "database": True,  # Check database connection
-        "cache": True,  # Check cache availability
         "r_environment": await check_r_environment(),
     }
 

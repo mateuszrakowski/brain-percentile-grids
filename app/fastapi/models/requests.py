@@ -69,10 +69,6 @@ class PatientCalculationRequest(BaseModel):
         description="Structures to calculate (None = all available)"
     )
 
-    use_cached_models: bool = Field(
-        default=True, description="Whether to use cached reference models"
-    )
-
 
 class FileUploadMetadata(BaseModel):
     """Metadata for uploaded files."""
