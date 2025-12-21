@@ -1,0 +1,13 @@
+Lifespan:
+https://fastapi.tiangolo.com/advanced/events/
+
+Pydantic settings and env variables:
+https://fastapi.tiangolo.com/advanced/settings/#run-the-server
+
+CORS:
+https://fastapi.tiangolo.com/tutorial/cors/#steps
+https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS
+
+Dependencies:
+https://fastapi.tiangolo.com/tutorial/dependencies/#create-a-dependency-or-dependable
+

@@ -1,0 +1,12 @@
+fastapi[standard]
+uvicorn[standard]
+python-multipart
+aiofiles
+pydantic
+pydantic-settings
+httpx
+pandas
+numpy
+matplotlib
+rpy2
+sse-starlette
