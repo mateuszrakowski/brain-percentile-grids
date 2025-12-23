@@ -5,7 +5,6 @@ https://fastapi.tiangolo.com/advanced/settings/#run-the-server
 """
 
 from functools import lru_cache
-from typing import List, Optional
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -32,21 +31,21 @@ class Settings(BaseSettings):
     secret_key: str = "your-secret-key-change-in-production"
 
     # CORS settings
-    cors_origins: List[str] = ["http://localhost:3000", "http://localhost:5000"]
+    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5000"]
     cors_allow_credentials: bool = True
 
     # File upload settings
     max_upload_size: int = 16 * 1024 * 1024  # 16MB
-    allowed_extensions: List[str] = ["csv", "xlsx", "xls"]
+    allowed_extensions: list[str] = ["csv", "xlsx", "xls"]
     max_files_count: int = 300
     upload_folder: str = "./uploads"
 
     # R environment
-    r_home: Optional[str] = None
-    r_libs: Optional[str] = None
+    r_home: str | None = None
+    r_libs: str | None = None
 
     # Redis settings (for production)
-    redis_url: Optional[str] = None
+    redis_url: str | None = None
     redis_ttl: int = 86400  # 24 hours
 
     # Worker settings
@@ -69,7 +68,7 @@ class Settings(BaseSettings):
         return v
 
 
-@lru_cache()
+@lru_cache
 def get_settings():
     """
     Create cached settings instance.

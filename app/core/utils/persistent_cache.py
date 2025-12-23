@@ -9,10 +9,9 @@ import json
 import logging
 import os
 from datetime import datetime
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import pandas as pd
-
 from core.engine.model import GAMLSS, FittedGAMLSSModel
 from core.utils.data_fingerprinting import (
     create_dataframe_fingerprint,
@@ -68,7 +67,7 @@ class PersistentModelCache:
         logger.info(f"PersistentModelCache initialized with cache_dir: {cache_dir}")
 
         # In-memory cache for fast access during session
-        self._memory_cache: Dict[str, Any] = {}
+        self._memory_cache: dict[str, Any] = {}
 
     def _get_model_path(self, cache_key: str) -> str:
         """
@@ -118,7 +117,7 @@ class PersistentModelCache:
         """
         return os.path.join(self.metadata_dir, f"{cache_key}.json")
 
-    def _save_metadata(self, cache_key: str, metadata: Dict[str, Any]) -> None:
+    def _save_metadata(self, cache_key: str, metadata: dict[str, Any]) -> None:
         """
         Save metadata for a cached model.
 
@@ -141,7 +140,7 @@ class PersistentModelCache:
         except Exception as e:
             logger.error(f"Failed to save metadata for {cache_key}: {e}")
 
-    def _load_metadata(self, cache_key: str) -> Optional[Dict[str, Any]]:
+    def _load_metadata(self, cache_key: str) -> dict[str, Any] | None:
         """
         Load metadata for a cached model.
 
@@ -161,7 +160,7 @@ class PersistentModelCache:
             return None
 
         try:
-            with open(metadata_path, "r") as f:
+            with open(metadata_path) as f:
                 return json.load(f)
         except Exception as e:
             logger.error(f"Failed to load metadata for {cache_key}: {e}")
@@ -329,7 +328,7 @@ class PersistentModelCache:
         reference_data: pd.DataFrame,
         x_column: str,
         percentiles: list[float] | None = None,
-    ) -> Optional[FittedGAMLSSModel]:
+    ) -> FittedGAMLSSModel | None:
         """
         Load the latest model for a structure, regardless of training dataset.
 
@@ -438,7 +437,7 @@ class PersistentModelCache:
         x_column: str,
         y_column: str,
         percentiles: list[float] | None = None,
-    ) -> Optional[FittedGAMLSSModel]:
+    ) -> FittedGAMLSSModel | None:
         """
         Load a fitted GAMLSS model from persistent cache.
 
@@ -501,7 +500,7 @@ class PersistentModelCache:
             logger.error(f"Failed to load model {cache_key}: {e}")
             return None
 
-    def get_plot(self, cache_key: str) -> Optional[bytes]:
+    def get_plot(self, cache_key: str) -> bytes | None:
         """
         Get plot data from cache.
 
@@ -581,7 +580,7 @@ class PersistentModelCache:
         x_column: str,
         data_fingerprint: str,
         percentiles: list[float] | None = None,
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         """
         Check if a model is already cached for the given parameters.
 
@@ -615,7 +614,7 @@ class PersistentModelCache:
 
         return False, cache_key
 
-    def get_cache_info(self) -> Dict[str, Any]:
+    def get_cache_info(self) -> dict[str, Any]:
         """
         Get information about cached items.
 

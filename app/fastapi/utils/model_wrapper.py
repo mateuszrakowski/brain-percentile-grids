@@ -6,12 +6,8 @@ abstracting the complexity of the underlying statistical engine for Flask applic
 """
 
 import logging
-import os
-import sys
-from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
-
 from core.engine.model import GAMLSS, FittedGAMLSSModel
 from core.engine.selector import GAMLSSModelSelector
 from core.resources.model_candidates import ModelCandidate
@@ -50,7 +46,7 @@ class ModelSelector:
         data_table: pd.DataFrame,
         x_column: str,
         y_column: str,
-        percentiles: Optional[List[float]] = None,
+        percentiles: list[float] | None = None,
     ) -> None:
         """
         Initialize the ModelSelector.
@@ -100,7 +96,7 @@ class ModelSelector:
             gamlss_fitter=self.gamlss_fitter, model_candidates=self.model_candidates
         )
 
-    def _get_default_model_candidates(self) -> List[ModelCandidate]:
+    def _get_default_model_candidates(self) -> list[ModelCandidate]:
         """
         Get default model candidates for brain structure modeling.
 
@@ -118,7 +114,7 @@ class ModelSelector:
             # Fallback to basic model candidates if the resource file doesn't exist
             return self._create_fallback_candidates()
 
-    def _create_fallback_candidates(self) -> List[ModelCandidate]:
+    def _create_fallback_candidates(self) -> list[ModelCandidate]:
         """
         Create basic fallback model candidates if the resource file is not available.
 
@@ -162,7 +158,7 @@ class ModelSelector:
             ),
         ]
 
-    def get_best_model(self, criterion: str = "bic") -> Optional[FittedGAMLSSModel]:
+    def get_best_model(self, criterion: str = "bic") -> FittedGAMLSSModel | None:
         """
         Get the best model using the specified criterion.
 
@@ -183,7 +179,9 @@ class ModelSelector:
         """
         valid_criteria = {"aic", "bic", "deviance"}
         if criterion.lower() not in valid_criteria:
-            raise ValueError(f"Invalid criterion '{criterion}'. Must be one of: {valid_criteria}")
+            raise ValueError(
+                f"Invalid criterion '{criterion}'. Must be one of: {valid_criteria}"
+            )
 
         try:
             logger.info(f"Fitting models with criterion: {criterion}")
@@ -198,7 +196,7 @@ class ModelSelector:
             logger.error(f"Error in model selection: {e}")
             return None
 
-    def get_available_families(self) -> List[str]:
+    def get_available_families(self) -> list[str]:
         """
         Get list of available distribution families.
 
@@ -207,9 +205,9 @@ class ModelSelector:
         List[str]
             List of unique distribution family names.
         """
-        return list(set(candidate.family for candidate in self.model_candidates))
+        return list({candidate.family for candidate in self.model_candidates})
 
-    def get_available_formulas(self) -> List[str]:
+    def get_available_formulas(self) -> list[str]:
         """
         Get list of available formula types.
 
@@ -218,4 +216,4 @@ class ModelSelector:
         List[str]
             List of unique mu formula templates.
         """
-        return list(set(candidate.mu_formula for candidate in self.model_candidates))
+        return list({candidate.mu_formula for candidate in self.model_candidates})

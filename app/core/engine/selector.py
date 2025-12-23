@@ -1,5 +1,5 @@
 import os
-from typing import Any, Dict
+from typing import Any
 
 from app.core.engine.model import GAMLSS, FittedGAMLSSModel
 from app.core.resources.model_candidates import ModelCandidate
@@ -22,7 +22,7 @@ class GAMLSSModelSelector:
     def __init__(self, gamlss_fitter: GAMLSS, model_candidates: list[ModelCandidate]):
         self.fitter = gamlss_fitter
         self.model_candidates = model_candidates
-        self.results: Dict[str, Any] = {}
+        self.results: dict[str, Any] = {}
 
     def select_best_model(
         self, model_path: str = "/app/data/models/", criterion: str = "bic"
@@ -45,7 +45,7 @@ class GAMLSSModelSelector:
         FittedGAMLSSModel | None
             The loaded or newly fitted model, or None if fitting fails.
         """
-        model_path = os.path.abspath(model_path + f"gamlss_{getattr(self.fitter, 'y_column')}.rds")
+        model_path = os.path.abspath(model_path + f"gamlss_{self.fitter.y_column}.rds")
 
         if os.path.exists(model_path):
             print(f"Found existing model at {model_path}. Loading...")
@@ -60,7 +60,10 @@ class GAMLSSModelSelector:
                 print("Model loaded successfully.")
                 return loaded_model
             except Exception as e:
-                print(f"Warning: Failed to load existing model at {model_path}. " f"Error: {e}")
+                print(
+                    f"Warning: Failed to load existing model at {model_path}. "
+                    f"Error: {e}"
+                )
                 print("Proceeding to fit a new model.")
 
         print(f"No existing model found at {model_path}. Starting model selection...")
@@ -135,8 +138,12 @@ class GAMLSSModelSelector:
                 # Build fit parameters, including nu and tau if present
                 fit_params = {
                     "family": model_config.family,
-                    "formula_mu": model_config.mu_formula.format(x=self.fitter.x_column),
-                    "formula_sigma": model_config.sigma_formula.format(x=self.fitter.x_column),
+                    "formula_mu": model_config.mu_formula.format(
+                        x=self.fitter.x_column
+                    ),
+                    "formula_sigma": model_config.sigma_formula.format(
+                        x=self.fitter.x_column
+                    ),
                     "control_params": model_config.control_params,
                 }
 
@@ -167,7 +174,9 @@ class GAMLSSModelSelector:
                 self.results[model_name] = None
 
         successful_models = {
-            name: model for name, model in self.results.items() if model and model.converged
+            name: model
+            for name, model in self.results.items()
+            if model and model.converged
         }
 
         if not successful_models:

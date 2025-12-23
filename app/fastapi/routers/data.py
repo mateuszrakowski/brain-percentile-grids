@@ -2,26 +2,24 @@
 Data management endpoints for file uploads and retrieval.
 """
 
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
+from app.fastapi.auth.dependencies import get_current_user
 from app.fastapi.db.database import get_session
+from app.fastapi.db.models import User
 from app.fastapi.dependencies import get_validated_files
 from app.fastapi.services.reference_data import ReferenceDataService
 from app.fastapi.utils.file_utils import PatientDataProcessor, ValidatedFile
 
 router = APIRouter(prefix="/api/data", tags=["data"])
 
-# TODO: Replace with authentication dependency
-# from app.fastapi.auth import get_current_user
-# current_user: User = Depends(get_current_user)
-TEMP_USER_ID = 1
-
 
 @router.post("/upload/reference")
 async def upload_reference_data(
+    current_user: Annotated[User, Depends(get_current_user)],
     files: list[ValidatedFile] = Depends(get_validated_files),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
@@ -33,6 +31,8 @@ async def upload_reference_data(
 
     Parameters
     ----------
+    current_user : User
+        The authenticated user.
     files : list[ValidatedFile]
         Validated uploaded files.
     session : Session
@@ -43,8 +43,7 @@ async def upload_reference_data(
     dict[str, Any]
         Processing result with statistics.
     """
-    # TODO: Get user_id from authenticated user
-    user_id = TEMP_USER_ID
+    user_id = current_user.id
 
     # Process files to DataFrames
     processor = PatientDataProcessor()
@@ -68,6 +67,7 @@ async def upload_reference_data(
 
 @router.get("/reference")
 async def get_reference_data(
+    current_user: Annotated[User, Depends(get_current_user)],
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
     """
@@ -75,6 +75,8 @@ async def get_reference_data(
 
     Parameters
     ----------
+    current_user : User
+        The authenticated user.
     session : Session
         Database session.
 
@@ -88,8 +90,7 @@ async def get_reference_data(
     HTTPException
         404 if no reference data found.
     """
-    # TODO: Get user_id from authenticated user
-    user_id = TEMP_USER_ID
+    user_id = current_user.id
 
     service = ReferenceDataService(session)
     summary = service.get_reference_summary(user_id)
@@ -102,6 +103,7 @@ async def get_reference_data(
 
 @router.delete("/reference")
 async def clear_reference_data(
+    current_user: Annotated[User, Depends(get_current_user)],
     session: Session = Depends(get_session),
 ) -> dict[str, str]:
     """
@@ -109,6 +111,8 @@ async def clear_reference_data(
 
     Parameters
     ----------
+    current_user : User
+        The authenticated user.
     session : Session
         Database session.
 
@@ -117,8 +121,7 @@ async def clear_reference_data(
     dict[str, str]
         Confirmation message with count of deleted records.
     """
-    # TODO: Get user_id from authenticated user
-    user_id = TEMP_USER_ID
+    user_id = current_user.id
 
     service = ReferenceDataService(session)
     deleted_count = service.clear_reference_data(user_id)

@@ -3,8 +3,6 @@ Request models for API endpoints.
 These models validate incoming data automatically.
 """
 
-from typing import List, Optional
-
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
@@ -15,23 +13,23 @@ class ReferenceCalculationRequest(BaseModel):
         default="AgeYears", description="Independent variable column name"
     )
 
-    y_columns: List[str] = Field(
+    y_columns: list[str] = Field(
         min_length=1,
         description="Dependent variable columns to model",
     )
 
-    percentiles: List[float] = Field(
+    percentiles: list[float] = Field(
         default=[0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95],
         description="Percentiles to calculate",
     )
 
-    model_families: Optional[List[str]] = Field(
+    model_families: list[str] | None = Field(
         default=None, description="GAMLSS distribution families to try"
     )
 
     @field_validator("percentiles", mode="after")
     @classmethod
-    def validate_percentiles(cls, v: List[float]) -> List[float]:
+    def validate_percentiles(cls, v: list[float]) -> list[float]:
         """Ensure percentiles are between 0 and 1."""
         for p in v:
             if not 0 < p < 1:
@@ -40,7 +38,7 @@ class ReferenceCalculationRequest(BaseModel):
 
     @field_validator("y_columns", mode="after")
     @classmethod
-    def validate_y_columns(cls, v: List[str]) -> List[str]:
+    def validate_y_columns(cls, v: list[str]) -> list[str]:
         """Ensure column names are valid."""
         for col in v:
             if not col or not col.strip():
@@ -61,11 +59,11 @@ class ReferenceCalculationRequest(BaseModel):
 class PatientCalculationRequest(BaseModel):
     """Request model for patient percentile calculations."""
 
-    patient_indices: List[int] = Field(
+    patient_indices: list[int] = Field(
         min_length=1, description="Indices of patients to process"
     )
 
-    y_columns: Optional[List[str]] = Field(
+    y_columns: list[str] | None = Field(
         description="Structures to calculate (None = all available)"
     )
 

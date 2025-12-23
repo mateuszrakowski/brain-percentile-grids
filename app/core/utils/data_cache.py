@@ -2,7 +2,8 @@ import hashlib
 import inspect
 import os
 import pickle
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def disk_cache(cache_dir: str = ".cache"):
@@ -77,7 +78,7 @@ def generate_cache_key(func, args, kwargs):
 
     try:
         source_code = inspect.getsource(func)
-    except (IOError, TypeError):
+    except (OSError, TypeError):
         source_code = ""
 
     try:

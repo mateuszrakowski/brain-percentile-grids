@@ -10,3 +10,6 @@ numpy
 matplotlib
 rpy2
 sse-starlette
+sqlmodel
+pyjwt[crypto]
+pwdlib[argon2]

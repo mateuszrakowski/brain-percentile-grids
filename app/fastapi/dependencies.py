@@ -3,7 +3,7 @@ Shared dependencies for FastAPI endpoints.
 """
 
 import time
-from typing import Any, Dict
+from typing import Any
 
 from fastapi import Depends, File, HTTPException, Request, UploadFile
 
@@ -28,7 +28,7 @@ async def get_request_id(request: Request) -> str:
     return getattr(request.state, "request_id", "unknown")
 
 
-async def get_system_metrics() -> Dict[str, Any]:
+async def get_system_metrics() -> dict[str, Any]:
     """
     Get system metrics for monitoring.
 
@@ -91,7 +91,9 @@ async def get_validated_files(
             raise HTTPException(status_code=400, detail="File missing filename")
 
         # Check extension
-        if not any(file.filename.lower().endswith(ext) for ext in settings.allowed_extensions):
+        if not any(
+            file.filename.lower().endswith(ext) for ext in settings.allowed_extensions
+        ):
             raise HTTPException(
                 status_code=400,
                 detail=f"File type not allowed: {file.filename}. "

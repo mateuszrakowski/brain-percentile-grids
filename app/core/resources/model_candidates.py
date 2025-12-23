@@ -1,4 +1,5 @@
-from typing import Any, Dict
+from typing import Any
+
 from pydantic import BaseModel
 
 # Model definitions as data
@@ -128,7 +129,7 @@ class ModelCandidate(BaseModel):
     nu_formula: str | None = None
     tau_formula: str | None = None
     complexity: int
-    control_params: Dict[str, Any]
+    control_params: dict[str, Any]
 
 
 MODEL_CANDIDATES = [ModelCandidate(**definition) for definition in MODEL_DEFINITIONS]  # type: ignore

@@ -4,7 +4,7 @@ These are good starting points for learning FastAPI patterns.
 """
 
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 from fastapi import APIRouter, Depends
 
@@ -38,8 +38,8 @@ async def health_check():
 
 @router.get("/status")
 async def detailed_status(
-    system_metrics: Dict = Depends(get_system_metrics),
-) -> Dict[str, Any]:
+    system_metrics: dict = Depends(get_system_metrics),
+) -> dict[str, Any]:
     """
     Get detailed application status with metrics.
 
@@ -62,7 +62,7 @@ async def detailed_status(
 
 
 @router.get("/ready")
-async def readiness_check() -> Dict[str, bool | dict]:
+async def readiness_check() -> dict[str, bool | dict]:
     """
     Kubernetes-style readiness probe.
 

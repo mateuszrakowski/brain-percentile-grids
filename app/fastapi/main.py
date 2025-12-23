@@ -65,8 +65,8 @@ async def lifespan(app: FastAPI):
     logger.info(f"Upload folder ready: {settings.upload_folder}")
 
     # Initialize database
-    from app.fastapi.db.database import init_db
     from app.fastapi.db import models  # noqa: F401 - import to register models
+    from app.fastapi.db.database import init_db
 
     init_db()
     logger.info("Database initialized")
@@ -261,9 +261,10 @@ async def health_check() -> HealthResponse:
 
 
 # Include routers
-from .routers import calculations, data, health
+from .routers import auth, calculations, data, health  # noqa: E402
 
 app.include_router(health.router)
+app.include_router(auth.router)
 app.include_router(data.router)
 app.include_router(calculations.router)
 

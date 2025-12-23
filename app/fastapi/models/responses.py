@@ -4,7 +4,7 @@ These models ensure consistent response formats.
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -22,8 +22,8 @@ class ErrorResponse(BaseModel):
     """Standard error response."""
 
     error: str
-    detail: Optional[str] = None
-    request_id: Optional[str] = None
+    detail: str | None = None
+    request_id: str | None = None
     timestamp: datetime = Field(default_factory=datetime.now)
 
 
@@ -34,8 +34,8 @@ class ProgressUpdate(BaseModel):
     message: str
     progress: int = Field(ge=0, le=100)
     status: str  # running, completed, error
-    operation: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
+    operation: str | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class ReferenceUploadResponse(BaseModel):
@@ -44,8 +44,8 @@ class ReferenceUploadResponse(BaseModel):
     message: str
     rows: int
     columns: int
-    processing_info: Dict[str, Any]
-    structures_detected: List[str]
+    processing_info: dict[str, Any]
+    structures_detected: list[str]
     upload_id: str
 
     model_config = ConfigDict(
@@ -67,20 +67,20 @@ class ModelResult(BaseModel):
 
     structure: str
     converged: bool
-    aic: Optional[float] = None
-    bic: Optional[float] = None
-    family: Optional[str] = None
-    formula: Optional[str] = None
-    percentile_curves: Optional[Dict[str, List[float]]] = None
+    aic: float | None = None
+    bic: float | None = None
+    family: str | None = None
+    formula: str | None = None
+    percentile_curves: dict[str, list[float]] | None = None
     plot_available: bool = False
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class ReferenceCalculationResponse(BaseModel):
     """Response for reference calculations."""
 
     message: str
-    results: Dict[str, ModelResult]
+    results: dict[str, ModelResult]
     successful_count: int
     failed_count: int
     total_time: float
@@ -91,19 +91,19 @@ class PatientResult(BaseModel):
 
     patient_id: str
     structure: str
-    z_score: Optional[float]
-    percentile: Optional[float]
-    age: Optional[float]
+    z_score: float | None
+    percentile: float | None
+    age: float | None
     value: float
-    reference_mean: Optional[float]
-    reference_sd: Optional[float]
+    reference_mean: float | None
+    reference_sd: float | None
 
 
 class PatientCalculationResponse(BaseModel):
     """Response for patient calculations."""
 
     message: str
-    results: List[PatientResult]
+    results: list[PatientResult]
     patients_processed: int
     structures_processed: int
-    errors: List[str] = []
+    errors: list[str] = []

@@ -129,7 +129,7 @@ def process_csv_input(df: pd.DataFrame) -> pd.DataFrame:
             raise ValueError(
                 f"Could not parse birth date: {head['BirthDate'].iloc[0]}, "
                 f"error: {str(e)}"
-            )
+            ) from e
 
     try:
         # Try standard datetime parsing first
@@ -147,7 +147,7 @@ def process_csv_input(df: pd.DataFrame) -> pd.DataFrame:
             raise ValueError(
                 f"Could not parse study date: {head['StudyDate'].iloc[0]}, "
                 f"error: {str(e)}"
-            )
+            ) from e
 
     head["AgeYears"], head["AgeMonths"] = _calculate_age(birth_date, study_date)
 

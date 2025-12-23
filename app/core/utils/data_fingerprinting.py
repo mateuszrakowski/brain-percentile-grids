@@ -7,9 +7,8 @@ for cache validation purposes.
 
 import hashlib
 import json
-from typing import Any, Dict
+from typing import Any
 
-import numpy as np
 import pandas as pd
 
 
@@ -113,7 +112,7 @@ def _create_data_hash(df: pd.DataFrame) -> str:
     return hashlib.md5(combined_data.encode("utf-8")).hexdigest()
 
 
-def _create_column_stats(df: pd.DataFrame) -> Dict[str, Any]:
+def _create_column_stats(df: pd.DataFrame) -> dict[str, Any]:
     """
     Create statistical summary for each column to aid in validation.
 
@@ -132,7 +131,7 @@ def _create_column_stats(df: pd.DataFrame) -> Dict[str, Any]:
 
     for col in df.columns:
         col_data = df[col]
-        col_stats: Dict[str, Any] = {
+        col_stats: dict[str, Any] = {
             "count": int(len(col_data)),
             "null_count": int(col_data.isnull().sum()),
             "unique_count": int(col_data.nunique()),

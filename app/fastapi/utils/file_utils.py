@@ -83,9 +83,7 @@ class PatientDataProcessor:
     # Columns used for duplicate detection
     UNIQUE_COLUMNS = ["PatientID", "StudyDate", "StudyDescription"]
 
-    def process_files(
-        self, files: list[ValidatedFile]
-    ) -> list[pd.DataFrame]:
+    def process_files(self, files: list[ValidatedFile]) -> list[pd.DataFrame]:
         """
         Process validated files into DataFrames.
 
@@ -203,9 +201,7 @@ class PatientDataProcessor:
             DataFrame with reordered columns.
         """
         metadata_cols = [c for c in self.METADATA_COLUMNS if c in df.columns]
-        structure_cols = sorted(
-            c for c in df.columns if c not in self.METADATA_COLUMNS
-        )
+        structure_cols = sorted(c for c in df.columns if c not in self.METADATA_COLUMNS)
         return df[metadata_cols + structure_cols]
 
     @classmethod

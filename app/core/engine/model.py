@@ -2,7 +2,7 @@ import json
 import os
 import re
 from datetime import datetime
-from typing import Dict, Any
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -100,7 +100,9 @@ class FittedGAMLSSModel:
         robjects.DataFrame
             The converted R DataFrame.
         """
-        with r_env.localconverter(robjects.default_converter + r_env.pandas2ri.converter):
+        with r_env.localconverter(
+            robjects.default_converter + r_env.pandas2ri.converter
+        ):
             return robjects.conversion.py2rpy(table)  # type: ignore
 
     @staticmethod
@@ -175,7 +177,9 @@ class FittedGAMLSSModel:
             self.data_table[self.x_column].max(),
             200,
         )
-        df_pred_r = self._convert_table_to_r(pd.DataFrame({self.x_column: x_pred_points}))
+        df_pred_r = self._convert_table_to_r(
+            pd.DataFrame({self.x_column: x_pred_points})
+        )
 
         pred_params = r_env.gamlss_r.predictAll(
             object=self.model, newdata=df_pred_r, type="response"
@@ -200,7 +204,9 @@ class FittedGAMLSSModel:
 
         return percentile_curves
 
-    def plot_percentiles(self, percentile_curves: dict[float, np.ndarray]) -> plt.Figure:
+    def plot_percentiles(
+        self, percentile_curves: dict[float, np.ndarray]
+    ) -> plt.Figure:
         """
         Generate a matplotlib figure of the percentile curves.
 
@@ -236,7 +242,7 @@ class FittedGAMLSSModel:
             ax.plot(
                 x_pred_points,
                 curve_data,
-                label=f"{int(p*100)}th Percentile",
+                label=f"{int(p * 100)}th Percentile",
                 linestyle=linestyle,
                 linewidth=linewidth,
             )
@@ -330,7 +336,7 @@ class FittedGAMLSSModel:
             linewidth = 1.5 if p == 0.50 else 1.0
             alpha_line = 0.5
 
-            label = f"{int(p*100)}th Percentile" if p in [0.05, 0.50, 0.95] else None
+            label = f"{int(p * 100)}th Percentile" if p in [0.05, 0.50, 0.95] else None
 
             ax.plot(
                 x_pred_points,
@@ -368,7 +374,7 @@ class FittedGAMLSSModel:
 
         if oos_percentile:
             ax.annotate(
-                f" P {oos_percentile*100:.1f}\n (Z={oos_zscore:.2f})",
+                f" P {oos_percentile * 100:.1f}\n (Z={oos_zscore:.2f})",
                 (
                     patient_data[self.x_column].values[0],
                     patient_data[self.y_column].values[0],
@@ -472,7 +478,9 @@ class GAMLSS:
         self.percentiles = percentiles
 
     def _convert_table_to_r(self, table: pd.DataFrame) -> robjects.DataFrame:
-        with r_env.localconverter(robjects.default_converter + r_env.pandas2ri.converter):
+        with r_env.localconverter(
+            robjects.default_converter + r_env.pandas2ri.converter
+        ):
             return robjects.conversion.py2rpy(table)
 
     @staticmethod
@@ -542,7 +550,7 @@ class GAMLSS:
         """
         try:
             if os.path.exists(filename):
-                with open(filename, "r", encoding="utf-8") as f:
+                with open(filename, encoding="utf-8") as f:
                     data = json.load(f)
                     return data
             return None
@@ -556,7 +564,7 @@ class GAMLSS:
         formula_sigma: str,
         formula_nu: str | None = None,
         formula_tau: str | None = None,
-        control_params: Dict[str, Any] | None = None,
+        control_params: dict[str, Any] | None = None,
     ) -> FittedGAMLSSModel:
         """
         Fit a GAMLSS model with the given parameters.
