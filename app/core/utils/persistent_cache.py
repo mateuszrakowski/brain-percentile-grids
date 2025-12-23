@@ -29,15 +29,31 @@ class PersistentModelCache:
 
     This cache stores models as .rds files using R's native serialization,
     plots as binary PNG data, and metadata as JSON files for validation.
+
+    Attributes
+    ----------
+    cache_dir : str
+        Root directory for cache files.
+    validation_enabled : bool
+        Whether to validate data fingerprints.
+    models_dir : str
+        Directory for model files.
+    plots_dir : str
+        Directory for plot files.
+    metadata_dir : str
+        Directory for metadata files.
     """
 
     def __init__(self, cache_dir: str, validation_enabled: bool = True):
         """
         Initialize the persistent cache.
 
-        Args:
-            cache_dir: Directory to store cache files
-            validation_enabled: Whether to validate data fingerprints
+        Parameters
+        ----------
+        cache_dir : str
+            Directory to store cache files.
+        validation_enabled : bool, optional
+            Whether to validate data fingerprints.
         """
         self.cache_dir = cache_dir
         self.validation_enabled = validation_enabled
@@ -55,19 +71,64 @@ class PersistentModelCache:
         self._memory_cache: Dict[str, Any] = {}
 
     def _get_model_path(self, cache_key: str) -> str:
-        """Get the filesystem path for a model file."""
+        """
+        Get the filesystem path for a model file.
+
+        Parameters
+        ----------
+        cache_key : str
+            Cache key for the model.
+
+        Returns
+        -------
+        str
+            Full path to the model file.
+        """
         return os.path.join(self.models_dir, f"{cache_key}.rds")
 
     def _get_plot_path(self, cache_key: str) -> str:
-        """Get the filesystem path for a plot file."""
+        """
+        Get the filesystem path for a plot file.
+
+        Parameters
+        ----------
+        cache_key : str
+            Cache key for the plot.
+
+        Returns
+        -------
+        str
+            Full path to the plot file.
+        """
         return os.path.join(self.plots_dir, f"{cache_key}.png")
 
     def _get_metadata_path(self, cache_key: str) -> str:
-        """Get the filesystem path for a metadata file."""
+        """
+        Get the filesystem path for a metadata file.
+
+        Parameters
+        ----------
+        cache_key : str
+            Cache key for the metadata.
+
+        Returns
+        -------
+        str
+            Full path to the metadata file.
+        """
         return os.path.join(self.metadata_dir, f"{cache_key}.json")
 
     def _save_metadata(self, cache_key: str, metadata: Dict[str, Any]) -> None:
-        """Save metadata for a cached model."""
+        """
+        Save metadata for a cached model.
+
+        Parameters
+        ----------
+        cache_key : str
+            Cache key for the model.
+        metadata : Dict[str, Any]
+            Metadata dictionary to save.
+        """
         metadata_path = self._get_metadata_path(cache_key)
 
         # Add cache timestamp
@@ -81,7 +142,19 @@ class PersistentModelCache:
             logger.error(f"Failed to save metadata for {cache_key}: {e}")
 
     def _load_metadata(self, cache_key: str) -> Optional[Dict[str, Any]]:
-        """Load metadata for a cached model."""
+        """
+        Load metadata for a cached model.
+
+        Parameters
+        ----------
+        cache_key : str
+            Cache key for the model.
+
+        Returns
+        -------
+        Optional[Dict[str, Any]]
+            Metadata dictionary or None if not found.
+        """
         metadata_path = self._get_metadata_path(cache_key)
 
         if not os.path.exists(metadata_path):
@@ -100,7 +173,21 @@ class PersistentModelCache:
         """
         Validate that a cached model is still valid for the given data.
 
-        Returns True if the cache entry is valid, False otherwise.
+        Parameters
+        ----------
+        cache_key : str
+            Cache key to validate.
+        data_fingerprint : str
+            Expected data fingerprint.
+        x_column : str
+            Expected x column name.
+        y_column : str
+            Expected y column name.
+
+        Returns
+        -------
+        bool
+            True if the cache entry is valid, False otherwise.
         """
         if not self.validation_enabled:
             return True
@@ -137,14 +224,21 @@ class PersistentModelCache:
         """
         Save a fitted GAMLSS model to persistent cache.
 
-        Args:
-            cache_key: Unique cache key for the model
-            model: Fitted GAMLSS model to cache
-            data_fingerprint: Fingerprint of the training data
-            plot_data: Optional plot data as bytes
+        Parameters
+        ----------
+        cache_key : str
+            Unique cache key for the model.
+        model : FittedGAMLSSModel
+            Fitted GAMLSS model to cache.
+        data_fingerprint : str
+            Fingerprint of the training data.
+        plot_data : bytes | None, optional
+            Plot data as bytes.
 
-        Returns:
-            True if save was successful, False otherwise
+        Returns
+        -------
+        bool
+            True if save was successful, False otherwise.
         """
         try:
             model_path = self._get_model_path(cache_key)
@@ -194,17 +288,23 @@ class PersistentModelCache:
         plot_data: bytes | None = None,
     ) -> bool:
         """
-        Save a model using simple cache key and replace any existing model for
-        this structure.
+        Save a model using simple cache key and replace any existing model.
 
-        Args:
-            y_column: Structure name
-            model: Fitted GAMLSS model to cache
-            data_fingerprint: Fingerprint of the training data
-            plot_data: Optional plot data as bytes
+        Parameters
+        ----------
+        y_column : str
+            Structure name.
+        model : FittedGAMLSSModel
+            Fitted GAMLSS model to cache.
+        data_fingerprint : str
+            Fingerprint of the training data.
+        plot_data : bytes | None, optional
+            Plot data as bytes.
 
-        Returns:
-            True if save was successful, False otherwise
+        Returns
+        -------
+        bool
+            True if save was successful, False otherwise.
         """
         try:
             # Use simple cache key based only on structure name
@@ -233,14 +333,21 @@ class PersistentModelCache:
         """
         Load the latest model for a structure, regardless of training dataset.
 
-        Args:
-            y_column: Structure name
-            reference_data: Reference dataset (for model creation)
-            x_column: X column name
-            percentiles: Percentiles used in the model
+        Parameters
+        ----------
+        y_column : str
+            Structure name.
+        reference_data : pd.DataFrame
+            Reference dataset (for model creation).
+        x_column : str
+            X column name.
+        percentiles : list[float] | None, optional
+            Percentiles used in the model.
 
-        Returns:
-            Loaded FittedGAMLSSModel or None if not found
+        Returns
+        -------
+        Optional[FittedGAMLSSModel]
+            Loaded FittedGAMLSSModel or None if not found.
         """
         try:
             # Try simple cache key first (latest approach)
@@ -292,11 +399,15 @@ class PersistentModelCache:
         """
         Remove all cached models for a specific structure.
 
-        Args:
-            y_column: Structure name
+        Parameters
+        ----------
+        y_column : str
+            Structure name.
 
-        Returns:
-            True if removal was successful
+        Returns
+        -------
+        bool
+            True if removal was successful.
         """
         try:
             removed_count = 0
@@ -331,15 +442,23 @@ class PersistentModelCache:
         """
         Load a fitted GAMLSS model from persistent cache.
 
-        Args:
-            cache_key: Unique cache key for the model
-            reference_data: Reference dataset (used for validation and model creation)
-            x_column: X column name
-            y_column: Y column name
-            percentiles: Percentiles used in the model
+        Parameters
+        ----------
+        cache_key : str
+            Unique cache key for the model.
+        reference_data : pd.DataFrame
+            Reference dataset (used for validation and model creation).
+        x_column : str
+            X column name.
+        y_column : str
+            Y column name.
+        percentiles : list[float] | None, optional
+            Percentiles used in the model.
 
-        Returns:
-            Loaded FittedGAMLSSModel or None if not found/invalid
+        Returns
+        -------
+        Optional[FittedGAMLSSModel]
+            Loaded FittedGAMLSSModel or None if not found/invalid.
         """
         # Check memory cache first
         memory_key = f"model_{cache_key}"
@@ -386,11 +505,15 @@ class PersistentModelCache:
         """
         Get plot data from cache.
 
-        Args:
-            cache_key: Cache key for the plot
+        Parameters
+        ----------
+        cache_key : str
+            Cache key for the plot.
 
-        Returns:
-            Plot data as bytes or None if not found
+        Returns
+        -------
+        Optional[bytes]
+            Plot data as bytes or None if not found.
         """
         # Check memory cache first
         memory_key = f"plot_{cache_key}"
@@ -419,12 +542,17 @@ class PersistentModelCache:
         """
         Save plot data to cache.
 
-        Args:
-            cache_key: Cache key for the plot
-            plot_data: Plot data as bytes
+        Parameters
+        ----------
+        cache_key : str
+            Cache key for the plot.
+        plot_data : bytes
+            Plot data as bytes.
 
-        Returns:
-            True if save was successful
+        Returns
+        -------
+        bool
+            True if save was successful.
         """
         try:
             plot_path = self._get_plot_path(cache_key)
@@ -457,8 +585,21 @@ class PersistentModelCache:
         """
         Check if a model is already cached for the given parameters.
 
-        Returns:
-            Tuple of (is_cached: bool, cache_key: str)
+        Parameters
+        ----------
+        y_column : str
+            Target column name.
+        x_column : str
+            Feature column name.
+        data_fingerprint : str
+            Fingerprint of the data.
+        percentiles : list[float] | None, optional
+            List of percentiles.
+
+        Returns
+        -------
+        Tuple[bool, str]
+            Tuple of (is_cached, cache_key).
         """
         cache_key = create_model_cache_key(
             y_column, x_column, data_fingerprint, percentiles
@@ -475,7 +616,14 @@ class PersistentModelCache:
         return False, cache_key
 
     def get_cache_info(self) -> Dict[str, Any]:
-        """Get information about cached items."""
+        """
+        Get information about cached items.
+
+        Returns
+        -------
+        Dict[str, Any]
+            Dictionary with cache statistics.
+        """
         info = {
             "cache_dir": self.cache_dir,
             "memory_items": len(self._memory_cache),
@@ -506,8 +654,10 @@ class PersistentModelCache:
         """
         Clear all cached items from both memory and disk.
 
-        Returns:
-            True if successful
+        Returns
+        -------
+        bool
+            True if successful.
         """
         try:
             # Clear memory cache
@@ -531,11 +681,15 @@ class PersistentModelCache:
         """
         Remove a specific cached model and its associated files.
 
-        Args:
-            cache_key: Cache key to remove
+        Parameters
+        ----------
+        cache_key : str
+            Cache key to remove.
 
-        Returns:
-            True if removal was successful
+        Returns
+        -------
+        bool
+            True if removal was successful.
         """
         try:
             # Remove from memory cache

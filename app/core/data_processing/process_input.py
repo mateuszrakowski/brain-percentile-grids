@@ -1,8 +1,6 @@
-import os
 from datetime import datetime
 
 import pandas as pd
-
 from core.resources.brain_structures import (
     CerebralCerebellumCortex,
     CerebralCortex,
@@ -15,17 +13,19 @@ from core.resources.brain_structures import (
     WhiteMatterTotal,
 )
 
-# Note: UploadedFile functionality replaced with Flask file handling
-
 
 def _parse_input_file(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Parses the input DataFrame into header and body sections.
+    Parse the input DataFrame into header and body sections.
 
-    Args:
-        df: The input DataFrame from a CSV or Excel file.
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The input DataFrame from a CSV or Excel file.
 
-    Returns:
+    Returns
+    -------
+    tuple[pd.DataFrame, pd.DataFrame]
         A tuple containing the header and body DataFrames.
     """
     head = (
@@ -59,13 +59,18 @@ def _parse_input_file(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 def _calculate_age(birth_date: datetime, study_date: datetime) -> tuple[int, int]:
     """
-    Calculates age in years and months from birth and study dates.
+    Calculate age in years and months from birth and study dates.
 
-    Args:
-        birth_date: Birth date as a datetime object.
-        study_date: Study date as a datetime object.
+    Parameters
+    ----------
+    birth_date : datetime
+        Birth date as a datetime object.
+    study_date : datetime
+        Study date as a datetime object.
 
-    Returns:
+    Returns
+    -------
+    tuple[int, int]
         A tuple containing age in years and age in months.
     """
     age_years = (
@@ -83,6 +88,28 @@ def _calculate_age(birth_date: datetime, study_date: datetime) -> tuple[int, int
 
 
 def process_csv_input(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Process raw CSV/Excel input into a structured DataFrame.
+
+    Extracts patient metadata from the header section and brain structure
+    volumes from the body section, calculates patient age, and combines
+    them into a single processed DataFrame.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Raw DataFrame from CSV or Excel file input.
+
+    Returns
+    -------
+    pd.DataFrame
+        Processed DataFrame with patient metadata and structure volumes.
+
+    Raises
+    ------
+    ValueError
+        If birth or study date cannot be parsed.
+    """
     head, body = _parse_input_file(df)
 
     # Handle different date formats from CSV and XLSX files
@@ -140,6 +167,22 @@ def process_csv_input(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def sum_structure_volumes(structures_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Sum brain structure volumes by category.
+
+    Aggregates individual brain structure volumes into summary categories
+    such as cerebral cortex, white matter, cerebrospinal fluid, etc.
+
+    Parameters
+    ----------
+    structures_df : pd.DataFrame
+        DataFrame containing patient metadata and individual structure volumes.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with patient metadata and aggregated structure volumes.
+    """
     structure_classes = [
         CerebralCortex,
         CerebralCerebellumCortex,

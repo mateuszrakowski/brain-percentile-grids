@@ -25,8 +25,10 @@ async def health_check():
     """
     Basic health check endpoint.
 
-    Returns:
-        HealthResponse: Application health status
+    Returns
+    -------
+    HealthResponse
+        Application health status.
     """
     settings = get_settings()
     return HealthResponse(
@@ -39,7 +41,17 @@ async def detailed_status(
     system_metrics: Dict = Depends(get_system_metrics),
 ) -> Dict[str, Any]:
     """
-    Detailed application status with metrics.
+    Get detailed application status with metrics.
+
+    Parameters
+    ----------
+    system_metrics : Dict
+        System metrics from dependency injection.
+
+    Returns
+    -------
+    Dict[str, Any]
+        Status information including timestamp, system metrics, and uptime.
     """
     return {
         "status": "operational",
@@ -55,6 +67,11 @@ async def readiness_check() -> Dict[str, bool | dict]:
     Kubernetes-style readiness probe.
 
     Checks if the application is ready to serve requests.
+
+    Returns
+    -------
+    Dict[str, bool | dict]
+        Readiness status with individual check results.
     """
     checks = {
         "database": True,  # Check database connection
@@ -67,7 +84,14 @@ async def readiness_check() -> Dict[str, bool | dict]:
 
 
 async def check_r_environment() -> bool:
-    """Check if R environment is available."""
+    """
+    Check if R environment is available.
+
+    Returns
+    -------
+    bool
+        True if R environment is available, False otherwise.
+    """
     try:
         from app.core.engine.environment import check_r_environment as r_env_check
 

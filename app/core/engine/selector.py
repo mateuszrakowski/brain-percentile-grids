@@ -7,7 +7,16 @@ from app.core.resources.model_candidates import ModelCandidate
 
 class GAMLSSModelSelector:
     """
-    Selects the best GAMLSS model from a list of candidates.
+    Select the best GAMLSS model from a list of candidates.
+
+    Attributes
+    ----------
+    fitter : GAMLSS
+        The GAMLSS fitter instance.
+    model_candidates : list[ModelCandidate]
+        List of model configurations to evaluate.
+    results : Dict[str, Any]
+        Dictionary storing fitted model results.
     """
 
     def __init__(self, gamlss_fitter: GAMLSS, model_candidates: list[ModelCandidate]):
@@ -19,17 +28,22 @@ class GAMLSSModelSelector:
         self, model_path: str = "/app/data/models/", criterion: str = "bic"
     ) -> FittedGAMLSSModel | None:
         """
-        Checks if a saved model exists at the given path and loads it.
-        If not found, it runs the model selection process, saves the best
-        model to the path, and returns it.
+        Check if a saved model exists and load it, or fit a new one.
 
-        Args:
-            model_path str: The full path to the .rds model file.
-            criterion str: The criterion for model selection ('aic', 'bic', 'deviance').
+        If a saved model exists at the given path, it is loaded. Otherwise,
+        the model selection process runs, saves the best model, and returns it.
 
-        Returns:
-            FittedGAMLSSModel | None: The loaded or newly fitted model, or None if
-            fitting fails.
+        Parameters
+        ----------
+        model_path : str, optional
+            The directory path where model files are stored.
+        criterion : str, optional
+            The criterion for model selection ('aic', 'bic', 'deviance').
+
+        Returns
+        -------
+        FittedGAMLSSModel | None
+            The loaded or newly fitted model, or None if fitting fails.
         """
         model_path = os.path.abspath(model_path + f"gamlss_{getattr(self.fitter, 'y_column')}.rds")
 
@@ -63,6 +77,19 @@ class GAMLSSModelSelector:
         return best_model
 
     def _get_sample_size_appropriate_models(self, n: int) -> list[ModelCandidate]:
+        """
+        Get model candidates appropriate for the sample size.
+
+        Parameters
+        ----------
+        n : int
+            Number of samples in the dataset.
+
+        Returns
+        -------
+        list[ModelCandidate]
+            Filtered list of model candidates with appropriate complexity.
+        """
         if n < 30:
             max_complexity = 2
         elif n < 100:
@@ -75,6 +102,24 @@ class GAMLSSModelSelector:
         return [m for m in self.model_candidates if m.complexity <= max_complexity]
 
     def fit_models(self, criterion: str = "bic") -> FittedGAMLSSModel | None:
+        """
+        Fit all candidate models and return the best one.
+
+        Parameters
+        ----------
+        criterion : str, optional
+            The criterion for model selection ('aic', 'bic', 'deviance').
+
+        Returns
+        -------
+        FittedGAMLSSModel | None
+            The best fitted model, or None if no models converged.
+
+        Raises
+        ------
+        ValueError
+            If criterion is not one of 'aic', 'bic', or 'deviance'.
+        """
         if criterion not in ["aic", "bic", "deviance"]:
             raise ValueError("Criterion must be 'aic', 'bic', or 'deviance'.")
 

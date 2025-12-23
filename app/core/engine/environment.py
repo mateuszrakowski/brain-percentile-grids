@@ -10,20 +10,46 @@ logger = logging.getLogger(__name__)
 
 
 class REnvironmentError(Exception):
-    """Raised when R environment cannot be initialized."""
+    """
+    Exception raised when R environment cannot be initialized.
+
+    This exception is raised when there are issues with R installation,
+    missing R packages, or other R environment configuration problems.
+    """
 
     pass
 
 
 class REnvironment:
     """
-    A Singleton class to manage the R environment connection.
+    Singleton class to manage the R environment connection.
 
-    It ensures that R packages are imported and the environment is
+    Ensures that R packages are imported and the environment is
     initialized only once during the application's lifecycle.
 
-    Raises:
-        REnvironmentError: If R or required packages are not available.
+    Attributes
+    ----------
+    base : rpackages.Package
+        R base package.
+    stats : rpackages.Package
+        R stats package.
+    grDevices : rpackages.Package
+        R graphics devices package.
+    gamlss_r : rpackages.Package
+        GAMLSS R package.
+    gamlss_dist : rpackages.Package
+        GAMLSS distributions package.
+    pandas2ri : module
+        rpy2 pandas to R conversion module.
+    localconverter : function
+        Local context converter for rpy2.
+    robjects : module
+        rpy2 robjects module.
+
+    Raises
+    ------
+    REnvironmentError
+        If R or required packages are not available.
     """
 
     _instance = None
@@ -67,7 +93,14 @@ class REnvironment:
 
     @property
     def is_available(self) -> bool:
-        """Check if R environment was successfully initialized."""
+        """
+        Check if R environment was successfully initialized.
+
+        Returns
+        -------
+        bool
+            True if R environment is available, False otherwise.
+        """
         return self._initialized and self._init_error is None
 
 
@@ -75,11 +108,15 @@ def get_r_environment() -> REnvironment:
     """
     Get the R environment singleton.
 
-    Returns:
-        REnvironment: The initialized R environment.
+    Returns
+    -------
+    REnvironment
+        The initialized R environment.
 
-    Raises:
-        REnvironmentError: If R environment is not available.
+    Raises
+    ------
+    REnvironmentError
+        If R environment is not available.
     """
     env = REnvironment()
     if not env.is_available:
@@ -88,7 +125,14 @@ def get_r_environment() -> REnvironment:
 
 
 def check_r_environment() -> bool:
-    """Check if R environment is properly available."""
+    """
+    Check if R environment is properly available.
+
+    Returns
+    -------
+    bool
+        True if R environment is available, False otherwise.
+    """
     try:
         return REnvironment().is_available
     except REnvironmentError:

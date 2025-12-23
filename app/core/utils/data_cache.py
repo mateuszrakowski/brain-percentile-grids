@@ -6,6 +6,19 @@ from typing import Any, Callable
 
 
 def disk_cache(cache_dir: str = ".cache"):
+    """
+    Decorator for caching function results to disk.
+
+    Parameters
+    ----------
+    cache_dir : str, optional
+        Directory to store cache files.
+
+    Returns
+    -------
+    Callable
+        Decorator function that wraps the target function with caching.
+    """
     os.makedirs(cache_dir, exist_ok=True)
     memory_cache: dict[str, Any] = {}
 
@@ -43,6 +56,23 @@ def disk_cache(cache_dir: str = ".cache"):
 
 
 def generate_cache_key(func, args, kwargs):
+    """
+    Generate a unique cache key for a function call.
+
+    Parameters
+    ----------
+    func : Callable
+        The function being cached.
+    args : tuple
+        Positional arguments to the function.
+    kwargs : dict
+        Keyword arguments to the function.
+
+    Returns
+    -------
+    str
+        MD5 hash string serving as the cache key.
+    """
     func_id = f"{func.__module__}.{func.__name__}"
 
     try:
@@ -63,6 +93,14 @@ def generate_cache_key(func, args, kwargs):
 
 
 def clear_cache(cache_dir: str = ".cache"):
+    """
+    Clear all files from the cache directory.
+
+    Parameters
+    ----------
+    cache_dir : str, optional
+        Directory containing cache files.
+    """
     if not os.path.exists(cache_dir):
         return
     for file in os.listdir(cache_dir):
@@ -70,6 +108,14 @@ def clear_cache(cache_dir: str = ".cache"):
 
 
 def clear_model_cache(model_path: str = "/app/data/models/"):
+    """
+    Clear all files from the model cache directory.
+
+    Parameters
+    ----------
+    model_path : str, optional
+        Directory containing cached model files.
+    """
     if not os.path.exists(model_path):
         return
     for file in os.listdir(model_path):
@@ -77,17 +123,45 @@ def clear_model_cache(model_path: str = "/app/data/models/"):
 
 
 class DataCache:
-    """Simple in-memory cache for storing models and data."""
+    """
+    Simple in-memory cache for storing models and data.
+
+    Attributes
+    ----------
+    _cache : dict[str, Any]
+        Internal dictionary storing cached values.
+    """
 
     def __init__(self):
         self._cache: dict[str, Any] = {}
 
     def set(self, key: str, value: Any) -> None:
-        """Store a value in the cache."""
+        """
+        Store a value in the cache.
+
+        Parameters
+        ----------
+        key : str
+            Cache key.
+        value : Any
+            Value to store.
+        """
         self._cache[key] = value
 
     def get(self, key: str) -> Any:
-        """Retrieve a value from the cache."""
+        """
+        Retrieve a value from the cache.
+
+        Parameters
+        ----------
+        key : str
+            Cache key to retrieve.
+
+        Returns
+        -------
+        Any
+            Cached value or None if not found.
+        """
         return self._cache.get(key)
 
     def clear(self) -> None:
@@ -95,17 +169,55 @@ class DataCache:
         self._cache.clear()
 
     def has(self, key: str) -> bool:
-        """Check if a key exists in the cache."""
+        """
+        Check if a key exists in the cache.
+
+        Parameters
+        ----------
+        key : str
+            Cache key to check.
+
+        Returns
+        -------
+        bool
+            True if key exists, False otherwise.
+        """
         return key in self._cache
 
     def remove(self, key: str) -> bool:
-        """Remove a key from the cache. Returns True if key existed."""
+        """
+        Remove a key from the cache.
+
+        Parameters
+        ----------
+        key : str
+            Cache key to remove.
+
+        Returns
+        -------
+        bool
+            True if key existed and was removed, False otherwise.
+        """
         return self._cache.pop(key, None) is not None
 
     def keys(self):
-        """Get all cache keys."""
+        """
+        Get all cache keys.
+
+        Returns
+        -------
+        KeysView
+            View of all keys in the cache.
+        """
         return self._cache.keys()
 
     def size(self) -> int:
-        """Get the number of items in cache."""
+        """
+        Get the number of items in cache.
+
+        Returns
+        -------
+        int
+            Number of cached items.
+        """
         return len(self._cache)

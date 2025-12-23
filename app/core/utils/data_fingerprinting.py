@@ -20,13 +20,17 @@ def create_dataframe_fingerprint(df: pd.DataFrame, columns: list[str] = None) ->
     This function creates a deterministic hash that remains consistent
     across different sessions as long as the underlying data is the same.
 
-    Args:
-        df: The pandas DataFrame to fingerprint
-        columns: Optional list of columns to include in fingerprint.
-                If None, all columns are used.
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The pandas DataFrame to fingerprint.
+    columns : list[str], optional
+        List of columns to include in fingerprint. If None, all columns are used.
 
-    Returns:
-        A hexadecimal string representing the dataset fingerprint
+    Returns
+    -------
+    str
+        A hexadecimal string representing the dataset fingerprint.
     """
     if df.empty:
         return hashlib.sha256(b"empty_dataframe").hexdigest()
@@ -67,7 +71,19 @@ def create_dataframe_fingerprint(df: pd.DataFrame, columns: list[str] = None) ->
 
 
 def _create_data_hash(df: pd.DataFrame) -> str:
-    """Create a hash of the actual data values."""
+    """
+    Create a hash of the actual data values.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame to hash.
+
+    Returns
+    -------
+    str
+        MD5 hash of the data values.
+    """
     # Convert DataFrame to string representation that's deterministic
     data_strings = []
 
@@ -98,7 +114,20 @@ def _create_data_hash(df: pd.DataFrame) -> str:
 
 
 def _create_column_stats(df: pd.DataFrame) -> Dict[str, Any]:
-    """Create statistical summary for each column to aid in validation."""
+    """
+    Create statistical summary for each column to aid in validation.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame to analyze.
+
+    Returns
+    -------
+    Dict[str, Any]
+        Dictionary with column statistics including count, null count, unique count,
+        and numeric stats (min, max, mean, std) for numeric columns.
+    """
     stats = {}
 
     for col in df.columns:
@@ -140,13 +169,19 @@ def validate_dataframe_fingerprint(
     """
     Validate that a DataFrame matches the expected fingerprint.
 
-    Args:
-        df: DataFrame to validate
-        expected_fingerprint: The expected fingerprint hash
-        columns: Optional list of columns to include in validation
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame to validate.
+    expected_fingerprint : str
+        The expected fingerprint hash.
+    columns : list[str], optional
+        List of columns to include in validation.
 
-    Returns:
-        True if the fingerprint matches, False otherwise
+    Returns
+    -------
+    bool
+        True if the fingerprint matches, False otherwise.
     """
     current_fingerprint = create_dataframe_fingerprint(df, columns)
     return current_fingerprint == expected_fingerprint
@@ -161,14 +196,21 @@ def create_model_cache_key(
     """
     Create a cache key for a specific model configuration.
 
-    Args:
-        y_column: Target column name
-        x_column: Feature column name
-        data_fingerprint: Fingerprint of the training data
-        percentiles: List of percentiles used in the model
+    Parameters
+    ----------
+    y_column : str
+        Target column name.
+    x_column : str
+        Feature column name.
+    data_fingerprint : str
+        Fingerprint of the training data.
+    percentiles : list[float] | None, optional
+        List of percentiles used in the model.
 
-    Returns:
-        A cache key string for the model
+    Returns
+    -------
+    str
+        A cache key string for the model.
     """
     if percentiles is None:
         percentiles = [0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95]
@@ -191,12 +233,17 @@ def create_model_cache_key(
 def create_simple_model_cache_key(y_column: str) -> str:
     """
     Create a simple cache key based only on the structure name.
+
     This allows using the latest model regardless of training dataset.
 
-    Args:
-        y_column: Target column name (brain structure)
+    Parameters
+    ----------
+    y_column : str
+        Target column name (brain structure).
 
-    Returns:
-        A simple cache key string for the model
+    Returns
+    -------
+    str
+        A simple cache key string for the model.
     """
     return f"model_{y_column}"

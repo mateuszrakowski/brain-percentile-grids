@@ -136,10 +136,29 @@ MODEL_CANDIDATES_DICT = {model.name: model for model in MODEL_CANDIDATES}
 
 
 def get_all_model_candidates():
-    """Return all available model candidates."""
+    """
+    Return all available model candidates.
+
+    Returns
+    -------
+    list[ModelCandidate]
+        List of all predefined GAMLSS model configurations.
+    """
     return MODEL_CANDIDATES
 
 
 def get_model_candidate_by_name(name: str):
-    """Get a specific model candidate by name."""
+    """
+    Get a specific model candidate by name.
+
+    Parameters
+    ----------
+    name : str
+        Name of the model candidate to retrieve.
+
+    Returns
+    -------
+    ModelCandidate | None
+        The model candidate if found, None otherwise.
+    """
     return MODEL_CANDIDATES_DICT.get(name)

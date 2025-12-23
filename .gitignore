@@ -1,8 +1,8 @@
 # Database files
 *.db
 
-# Project specific
-documentation.txt
+# Documentation (local notes, not for version control)
+docs/
 
 # Python
 __pycache__/

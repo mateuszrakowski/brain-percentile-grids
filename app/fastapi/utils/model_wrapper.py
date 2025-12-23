@@ -27,14 +27,22 @@ class ModelSelector:
     This class bridges the gap between the existing GAMLSSModelSelector and Flask app needs,
     providing a clean interface for model fitting and selection operations.
 
-    Attributes:
-        data_table: DataFrame containing the training data
-        x_column: Name of the independent variable column (typically age)
-        y_column: Name of the dependent variable column (brain structure volume)
-        percentiles: List of percentiles to calculate (default: [0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95])
-        gamlss_fitter: GAMLSS engine instance
-        model_candidates: List of model candidates for selection
-        selector: GAMLSSModelSelector instance
+    Attributes
+    ----------
+    data_table : pd.DataFrame
+        DataFrame containing the training data.
+    x_column : str
+        Name of the independent variable column (typically age).
+    y_column : str
+        Name of the dependent variable column (brain structure volume).
+    percentiles : List[float]
+        List of percentiles to calculate.
+    gamlss_fitter : GAMLSS
+        GAMLSS engine instance.
+    model_candidates : List[ModelCandidate]
+        List of model candidates for selection.
+    selector : GAMLSSModelSelector
+        GAMLSSModelSelector instance.
     """
 
     def __init__(
@@ -47,14 +55,21 @@ class ModelSelector:
         """
         Initialize the ModelSelector.
 
-        Args:
-            data_table: DataFrame containing the training data
-            x_column: Name of the independent variable column
-            y_column: Name of the dependent variable column
-            percentiles: List of percentiles to calculate
+        Parameters
+        ----------
+        data_table : pd.DataFrame
+            DataFrame containing the training data.
+        x_column : str
+            Name of the independent variable column.
+        y_column : str
+            Name of the dependent variable column.
+        percentiles : Optional[List[float]], optional
+            List of percentiles to calculate.
 
-        Raises:
-            ValueError: If data_table is empty or columns are not found
+        Raises
+        ------
+        ValueError
+            If data_table is empty or columns are not found.
         """
         # Validate inputs
         if data_table.empty:
@@ -88,6 +103,11 @@ class ModelSelector:
     def _get_default_model_candidates(self) -> List[ModelCandidate]:
         """
         Get default model candidates for brain structure modeling.
+
+        Returns
+        -------
+        List[ModelCandidate]
+            List of model candidates for GAMLSS fitting.
         """
         # Import here to avoid circular imports
         from core.resources.model_candidates import get_all_model_candidates
@@ -101,6 +121,11 @@ class ModelSelector:
     def _create_fallback_candidates(self) -> List[ModelCandidate]:
         """
         Create basic fallback model candidates if the resource file is not available.
+
+        Returns
+        -------
+        List[ModelCandidate]
+            List of basic fallback model candidates.
         """
         return [
             ModelCandidate(
@@ -141,14 +166,20 @@ class ModelSelector:
         """
         Get the best model using the specified criterion.
 
-        Args:
-            criterion: Model selection criterion ('aic', 'bic', 'deviance')
+        Parameters
+        ----------
+        criterion : str, optional
+            Model selection criterion ('aic', 'bic', 'deviance').
 
-        Returns:
-            FittedGAMLSSModel or None if no model converged
+        Returns
+        -------
+        Optional[FittedGAMLSSModel]
+            Best fitted model or None if no model converged.
 
-        Raises:
-            ValueError: If criterion is not supported
+        Raises
+        ------
+        ValueError
+            If criterion is not supported.
         """
         valid_criteria = {"aic", "bic", "deviance"}
         if criterion.lower() not in valid_criteria:
@@ -168,9 +199,23 @@ class ModelSelector:
             return None
 
     def get_available_families(self) -> List[str]:
-        """Get list of available distribution families."""
+        """
+        Get list of available distribution families.
+
+        Returns
+        -------
+        List[str]
+            List of unique distribution family names.
+        """
         return list(set(candidate.family for candidate in self.model_candidates))
 
     def get_available_formulas(self) -> List[str]:
-        """Get list of available formula types."""
+        """
+        Get list of available formula types.
+
+        Returns
+        -------
+        List[str]
+            List of unique mu formula templates.
+        """
         return list(set(candidate.mu_formula for candidate in self.model_candidates))

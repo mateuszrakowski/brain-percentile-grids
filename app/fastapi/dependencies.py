@@ -12,12 +12,31 @@ from .utils.file_utils import ValidatedFile
 
 
 async def get_request_id(request: Request) -> str:
-    """Get request ID for tracking."""
+    """
+    Get request ID for tracking.
+
+    Parameters
+    ----------
+    request : Request
+        The FastAPI request object.
+
+    Returns
+    -------
+    str
+        Request ID or 'unknown' if not set.
+    """
     return getattr(request.state, "request_id", "unknown")
 
 
 async def get_system_metrics() -> Dict[str, Any]:
-    """Get system metrics for monitoring."""
+    """
+    Get system metrics for monitoring.
+
+    Returns
+    -------
+    Dict[str, Any]
+        Dictionary containing CPU, memory, disk usage percentages and uptime.
+    """
     import psutil
 
     return {
@@ -35,15 +54,25 @@ async def get_validated_files(
     """
     Validate uploaded files and return validated file objects.
 
-    Checks:
-    - File count within limits
-    - Filename present
-    - File extension allowed
-    - File size within limits
-    - File not empty
+    Checks file count, filename presence, extension, size, and content.
 
-    Returns:
-        List of ValidatedFile objects with content loaded
+    Parameters
+    ----------
+    files : list[UploadFile]
+        List of uploaded files.
+    settings : Settings
+        Application settings from dependency injection.
+
+    Returns
+    -------
+    list[ValidatedFile]
+        List of ValidatedFile objects with content loaded.
+
+    Raises
+    ------
+    HTTPException
+        400 if no files provided, too many files, invalid filename,
+        unsupported extension, file too large, or empty file.
     """
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
@@ -93,8 +122,27 @@ async def get_validated_files(
 
 # Dependency for pagination
 class PaginationParams:
-    """Common pagination parameters."""
+    """
+    Common pagination parameters.
+
+    Attributes
+    ----------
+    skip : int
+        Number of items to skip.
+    limit : int
+        Maximum number of items to return (capped at 1000).
+    """
 
     def __init__(self, skip: int = 0, limit: int = 100):
+        """
+        Initialize pagination parameters.
+
+        Parameters
+        ----------
+        skip : int, optional
+            Number of items to skip.
+        limit : int, optional
+            Maximum number of items to return.
+        """
         self.skip = skip
         self.limit = min(limit, 1000)  # Cap at 1000

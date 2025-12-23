@@ -18,10 +18,31 @@ r_env = get_r_environment()
 
 class FittedGAMLSSModel:
     """
-    Represents a single, fitted GAMLSS model.
+    Represent a single, fitted GAMLSS model.
 
     This object is self-contained and holds the R model object, its metrics,
     and the methods to interact with it (predict, plot, save).
+
+    Attributes
+    ----------
+    model : robjects.vectors.ListVector
+        The fitted R GAMLSS model object.
+    data_table : pd.DataFrame
+        The source data used for fitting.
+    x_column : str
+        Name of the independent variable column.
+    y_column : str
+        Name of the dependent variable column.
+    percentiles : list[float]
+        List of percentiles to calculate.
+    converged : bool
+        Whether the model converged successfully.
+    aic : float
+        Akaike Information Criterion value.
+    bic : float
+        Bayesian Information Criterion value.
+    deviance : float
+        Model deviance.
     """
 
     def __init__(
@@ -45,7 +66,19 @@ class FittedGAMLSSModel:
         self.deviance: float = self.model.rx2("G.deviance")[0]
 
     def _calculate_metric(self, metric_name: str) -> float:
-        """Helper to safely calculate AIC or BIC."""
+        """
+        Safely calculate AIC or BIC metric.
+
+        Parameters
+        ----------
+        metric_name : str
+            Name of the metric to calculate ('AIC' or 'BIC').
+
+        Returns
+        -------
+        float
+            The calculated metric value, or infinity if calculation fails.
+        """
         try:
             metric_func = getattr(r_env.stats, metric_name)
             metric_r_object = metric_func(self.model)
@@ -54,17 +87,50 @@ class FittedGAMLSSModel:
             return float("inf")
 
     def _convert_table_to_r(self, table: pd.DataFrame) -> robjects.DataFrame:
-        """Converts a pandas DataFrame to an R DataFrame."""
+        """
+        Convert a pandas DataFrame to an R DataFrame.
+
+        Parameters
+        ----------
+        table : pd.DataFrame
+            The pandas DataFrame to convert.
+
+        Returns
+        -------
+        robjects.DataFrame
+            The converted R DataFrame.
+        """
         with r_env.localconverter(robjects.default_converter + r_env.pandas2ri.converter):
             return robjects.conversion.py2rpy(table)  # type: ignore
 
     @staticmethod
     def _split_structure_name(structure_name: str) -> str:
-        """Adds spaces to a PascalCase string for plotting titles."""
+        """
+        Add spaces to a PascalCase string for plotting titles.
+
+        Parameters
+        ----------
+        structure_name : str
+            PascalCase structure name (e.g., 'CerebralCortex').
+
+        Returns
+        -------
+        str
+            Space-separated name (e.g., 'Cerebral Cortex').
+        """
         return re.sub(r"(?<!^)(?=[A-Z])", " ", structure_name)
 
     def save(self, model_path: str, run_info_path: str | None = None) -> None:
-        """Saves the R model object to a .rds file and optionally saves run info."""
+        """
+        Save the R model object to a .rds file and optionally save run info.
+
+        Parameters
+        ----------
+        model_path : str
+            Path where the .rds model file will be saved.
+        run_info_path : str | None, optional
+            Path for the run info JSON file. If None, auto-generated from model_path.
+        """
         # Save the model
         model_dir = os.path.dirname(model_path)
         if not os.path.exists(model_dir):
@@ -96,7 +162,14 @@ class FittedGAMLSSModel:
         print(f"Run info saved to {run_info_path}")
 
     def calculate_percentiles(self) -> dict[float, np.ndarray]:
-        """Calculates percentile curves for the fitted model."""
+        """
+        Calculate percentile curves for the fitted model.
+
+        Returns
+        -------
+        dict[float, np.ndarray]
+            Dictionary mapping percentile values to their corresponding curves.
+        """
         x_pred_points = np.linspace(
             self.data_table[self.x_column].min(),
             self.data_table[self.x_column].max(),
@@ -128,7 +201,19 @@ class FittedGAMLSSModel:
         return percentile_curves
 
     def plot_percentiles(self, percentile_curves: dict[float, np.ndarray]) -> plt.Figure:
-        """Generates and returns a matplotlib figure of the percentile curves."""
+        """
+        Generate a matplotlib figure of the percentile curves.
+
+        Parameters
+        ----------
+        percentile_curves : dict[float, np.ndarray]
+            Dictionary mapping percentile values to their corresponding curves.
+
+        Returns
+        -------
+        plt.Figure
+            Matplotlib figure with plotted percentile curves.
+        """
         fig, ax = plt.subplots(figsize=(12, 7))
 
         ax.scatter(
@@ -169,6 +254,19 @@ class FittedGAMLSSModel:
         return fig  # type: ignore
 
     def predict_patient_oos(self, patient_data: pd.DataFrame) -> tuple[float, float]:
+        """
+        Predict out-of-sample z-score and percentile for a patient.
+
+        Parameters
+        ----------
+        patient_data : pd.DataFrame
+            DataFrame containing patient's age and volume data.
+
+        Returns
+        -------
+        tuple[float, float]
+            Tuple of (z-score, percentile) for the patient.
+        """
         oos_zscore = None
         oos_percentile = None
 
@@ -197,9 +295,28 @@ class FittedGAMLSSModel:
         self,
         patient_data: pd.DataFrame,
         percentile_curves: dict[float, np.ndarray],
-        oos_zscore,
-        oos_percentile,
+        oos_zscore: float,
+        oos_percentile: float,
     ) -> plt.Figure:
+        """
+        Plot percentile curves with out-of-sample patient data point.
+
+        Parameters
+        ----------
+        patient_data : pd.DataFrame
+            DataFrame containing patient's age and volume data.
+        percentile_curves : dict[float, np.ndarray]
+            Dictionary mapping percentile values to their corresponding curves.
+        oos_zscore : float
+            Patient's calculated z-score.
+        oos_percentile : float
+            Patient's calculated percentile.
+
+        Returns
+        -------
+        plt.Figure
+            Matplotlib figure with percentile curves and patient data point.
+        """
         fig, ax = plt.subplots(figsize=(12, 7))
 
         x_pred_points = np.linspace(
@@ -286,12 +403,33 @@ class FittedGAMLSSModel:
         return fig
 
     def generate_grids(self) -> plt.Figure:
+        """
+        Generate percentile grid plot for the fitted model.
+
+        Returns
+        -------
+        plt.Figure
+            Matplotlib figure with percentile curves.
+        """
         percentile_curves = self.calculate_percentiles()
         plot_figure = self.plot_percentiles(percentile_curves)
 
         return plot_figure
 
     def generate_grids_oos(self, patient_data: pd.DataFrame) -> plt.Figure:
+        """
+        Generate percentile grid plot with out-of-sample patient data.
+
+        Parameters
+        ----------
+        patient_data : pd.DataFrame
+            DataFrame containing patient's age and volume data.
+
+        Returns
+        -------
+        plt.Figure
+            Matplotlib figure with percentile curves and patient data point.
+        """
         percentile_curves = self.calculate_percentiles()
         oos_zscore, oos_percentile = self.predict_patient_oos(patient_data)
 
@@ -304,10 +442,21 @@ class FittedGAMLSSModel:
 
 class GAMLSS:
     """
-    A factory class for fitting GAMLSS models.
+    Factory class for fitting GAMLSS models.
 
     This class holds the data and configuration, but not the state of a
     single fitted model. Its 'fit' method returns a new FittedGAMLSSModel object.
+
+    Attributes
+    ----------
+    data_table : pd.DataFrame
+        The source data for model fitting.
+    x_column : str
+        Name of the independent variable column.
+    y_column : str
+        Name of the dependent variable column.
+    percentiles : list[float]
+        List of percentiles to calculate.
     """
 
     def __init__(
@@ -335,7 +484,30 @@ class GAMLSS:
         percentiles: list[float],
     ) -> "FittedGAMLSSModel":
         """
-        Loads a pre-trained GAMLSS model from an RDS file.
+        Load a pre-trained GAMLSS model from an RDS file.
+
+        Parameters
+        ----------
+        model_path : str
+            Path to the .rds model file.
+        source_data : pd.DataFrame
+            The source data used for the model.
+        x_column : str
+            Name of the independent variable column.
+        y_column : str
+            Name of the dependent variable column.
+        percentiles : list[float]
+            List of percentiles to calculate.
+
+        Returns
+        -------
+        FittedGAMLSSModel
+            The loaded fitted model.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the model file does not exist.
         """
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"No model file found at {model_path}")
@@ -354,7 +526,20 @@ class GAMLSS:
             raise
 
     @staticmethod
-    def load_run_info(filename: str) -> None:
+    def load_run_info(filename: str) -> dict | None:
+        """
+        Load run info from a JSON file.
+
+        Parameters
+        ----------
+        filename : str
+            Path to the run info JSON file.
+
+        Returns
+        -------
+        dict | None
+            The run info dictionary, or None if file doesn't exist.
+        """
         try:
             if os.path.exists(filename):
                 with open(filename, "r", encoding="utf-8") as f:
@@ -374,8 +559,27 @@ class GAMLSS:
         control_params: Dict[str, Any] | None = None,
     ) -> FittedGAMLSSModel:
         """
-        Fits a GAMLSS model with the given parameters and returns a
-        FittedGAMLSSModel object.
+        Fit a GAMLSS model with the given parameters.
+
+        Parameters
+        ----------
+        family : str
+            Distribution family name (e.g., 'NO', 'LOGNO', 'BCT').
+        formula_mu : str
+            Formula for the location parameter (mu).
+        formula_sigma : str
+            Formula for the scale parameter (sigma).
+        formula_nu : str | None, optional
+            Formula for the skewness parameter (nu).
+        formula_tau : str | None, optional
+            Formula for the kurtosis parameter (tau).
+        control_params : Dict[str, Any] | None, optional
+            Additional control parameters for the GAMLSS fitting algorithm.
+
+        Returns
+        -------
+        FittedGAMLSSModel
+            The fitted GAMLSS model object.
         """
         r_table = self._convert_table_to_r(self.data_table)
         formulas = {

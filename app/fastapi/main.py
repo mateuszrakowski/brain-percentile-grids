@@ -30,7 +30,19 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
     """
     Manage application lifecycle.
-    This runs on startup and shutdown.
+
+    This context manager runs on startup and shutdown, initializing
+    the R environment, upload folder, and database.
+
+    Parameters
+    ----------
+    app : FastAPI
+        The FastAPI application instance.
+
+    Yields
+    ------
+    None
+        Control is yielded to the application during its lifetime.
     """
     # Startup
     logger.info(f"Starting {settings.app_name} v{settings.app_version}")
@@ -100,7 +112,21 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 # Request timing middleware
 @app.middleware("http")
 async def add_process_time_header(request: Request, call_next):
-    """Add processing time to response headers."""
+    """
+    Add processing time to response headers.
+
+    Parameters
+    ----------
+    request : Request
+        The incoming request.
+    call_next : Callable
+        The next middleware or route handler.
+
+    Returns
+    -------
+    Response
+        The response with X-Process-Time header added.
+    """
     start_time = time.time()
     response = await call_next(request)
     process_time = time.time() - start_time
@@ -111,7 +137,21 @@ async def add_process_time_header(request: Request, call_next):
 # Request ID middleware
 @app.middleware("http")
 async def add_request_id(request: Request, call_next):
-    """Add unique request ID for tracking."""
+    """
+    Add unique request ID for tracking.
+
+    Parameters
+    ----------
+    request : Request
+        The incoming request.
+    call_next : Callable
+        The next middleware or route handler.
+
+    Returns
+    -------
+    Response
+        The response with X-Request-ID header added.
+    """
     import uuid
 
     request_id = str(uuid.uuid4())
@@ -125,7 +165,21 @@ async def add_request_id(request: Request, call_next):
 # Global exception handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """Handle uncaught exceptions gracefully."""
+    """
+    Handle uncaught exceptions gracefully.
+
+    Parameters
+    ----------
+    request : Request
+        The request that caused the exception.
+    exc : Exception
+        The exception that was raised.
+
+    Returns
+    -------
+    JSONResponse
+        JSON response with error details (more verbose in debug mode).
+    """
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
 
     request_id = getattr(request.state, "request_id", "unknown")
@@ -150,7 +204,14 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    """Root endpoint - API information."""
+    """
+    Root endpoint - API information.
+
+    Returns
+    -------
+    HTMLResponse
+        HTML page with API information and documentation links.
+    """
     html_content = f"""
     <html>
         <head>
@@ -189,8 +250,10 @@ async def health_check() -> HealthResponse:
     """
     Health check endpoint.
 
-    Returns:
-        Dictionary with health status and metadata
+    Returns
+    -------
+    HealthResponse
+        Health status with version and environment information.
     """
     return HealthResponse(
         status="healthy", version=settings.app_version, environment=settings.environment
