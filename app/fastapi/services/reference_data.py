@@ -245,13 +245,19 @@ class ReferenceDataService:
         records_added = 0
 
         for _, row in df.iterrows():
-            # Create patient record
+            # Get age values (already calculated in process_csv_input)
+            age_years = row.get("AgeYears")
+            age_months = row.get("AgeMonths")
+
+            # Create patient record with pre-calculated age
             patient_record = PatientRecord(
                 user_id=user_id,
                 patient_id=str(row.get("PatientID", "")),
                 birth_date=str(row.get("BirthDate", "")),
                 study_date=str(row.get("StudyDate", "")),
                 study_description=row.get("StudyDescription"),
+                age_years=int(age_years) if pd.notna(age_years) else None,
+                age_months=int(age_months) if pd.notna(age_months) else None,
             )
             self.session.add(patient_record)
             self.session.flush()  # Get the ID

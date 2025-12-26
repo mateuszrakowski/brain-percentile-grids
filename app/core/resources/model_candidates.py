@@ -132,7 +132,7 @@ class ModelCandidate(BaseModel):
     control_params: dict[str, Any]
 
 
-MODEL_CANDIDATES = [ModelCandidate(**definition) for definition in MODEL_DEFINITIONS]  # type: ignore
+MODEL_CANDIDATES = [ModelCandidate(**definition) for definition in MODEL_DEFINITIONS]
 MODEL_CANDIDATES_DICT = {model.name: model for model in MODEL_CANDIDATES}
 
 

@@ -6,7 +6,7 @@ https://fastapi.tiangolo.com/advanced/settings/#run-the-server
 
 from functools import lru_cache
 
-from pydantic import field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -28,7 +28,10 @@ class Settings(BaseSettings):
     db_url: str = "sqlite:///grids_database.db"
 
     # Security
-    secret_key: str = "your-secret-key-change-in-production"
+    secret_key: str = Field(
+        default="your-secret-key-change-in-production",
+        validation_alias=AliasChoices("SECRET_KEY", "SECRET_KEY_DEV"),
+    )
 
     # CORS settings
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5000"]
