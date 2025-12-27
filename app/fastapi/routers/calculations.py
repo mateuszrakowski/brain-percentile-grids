@@ -318,7 +318,7 @@ async def calculate_patient_percentiles(
             percentile=r.percentile,
             age=r.age,
             value=r.value,
-            reference_mean=None,  # Could be added later
+            reference_mean=None,
             reference_sd=None,
         )
         for r in calc_results

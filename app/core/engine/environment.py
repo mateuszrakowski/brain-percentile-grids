@@ -45,6 +45,8 @@ class REnvironment:
         Local context converter for rpy2.
     robjects : module
         rpy2 robjects module.
+    converter : rpy2.robjects.conversion.Converter
+        Combined converter for pandas and R conversions.
 
     Raises
     ------
@@ -78,8 +80,7 @@ class REnvironment:
                 self.pandas2ri = pandas2ri
                 self.localconverter = localconverter
                 self.robjects = robjects
-
-                self.pandas2ri.activate()
+                self.converter = robjects.default_converter + pandas2ri.converter
 
                 logger.info("Successfully initialized R environment.")
                 self._initialized = True

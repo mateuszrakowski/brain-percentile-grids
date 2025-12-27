@@ -226,11 +226,9 @@ class CalculationService:
         """
         percentiles = percentiles or self.DEFAULT_PERCENTILES
 
-        # Get reference data
+        # Get reference data (caller must ensure data exists)
         df = self.get_reference_dataframe(user_id)
-        if df is None:
-            yield ReferenceCalculationResult(failed_count=0, successful_count=0)
-            return
+        assert df is not None, "Reference data must exist (caller should validate)"
 
         # Determine structures to fit
         if y_columns is None:

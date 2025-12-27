@@ -33,6 +33,7 @@ dependencies = [
     "httpx",
     "pandas",
     "numpy",
+    "scipy",
     "matplotlib",
     "rpy2",
     "sse-starlette",

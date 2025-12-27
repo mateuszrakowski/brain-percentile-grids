@@ -57,3 +57,7 @@ uploads/
 # OS
 .DS_Store
 Thumbs.db
+
+# Test data
+tests/data_mock_xlsx/
+tests/data_mock_csv/

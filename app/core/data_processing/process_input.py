@@ -1,7 +1,8 @@
 from datetime import datetime
 
 import pandas as pd
-from core.resources.brain_structures import (
+
+from app.core.resources.brain_structures import (
     CerebralCerebellumCortex,
     CerebralCortex,
     CerebrospinalFluidTotal,
