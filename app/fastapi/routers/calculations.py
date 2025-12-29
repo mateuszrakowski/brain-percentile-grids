@@ -3,25 +3,25 @@ Calculation endpoints for GAMLSS modeling and percentile calculations.
 
 Provides endpoints for:
 - Fitting reference models with SSE progress updates
-- Calculating patient percentiles against fitted models
+- Calculating patient percentiles against fitted models (via file upload)
 """
 
 import json
 import logging
 import time
-from typing import Annotated, Any
+from collections.abc import AsyncGenerator
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import pandas as pd
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.fastapi.auth.dependencies import get_current_user
 from app.fastapi.db.database import get_session
-from app.fastapi.db.models import User
-from app.fastapi.models.requests import (
-    PatientCalculationRequest,
-    ReferenceCalculationRequest,
-)
+from app.fastapi.db.models import ReferenceDataset, User
+from app.fastapi.dependencies import get_validated_files
+from app.fastapi.models.requests import ReferenceCalculationRequest
 from app.fastapi.models.responses import (
     ModelResult,
     PatientCalculationResponse,
@@ -33,17 +33,63 @@ from app.fastapi.services.calculation import (
     CalculationService,
     ReferenceCalculationResult,
 )
+from app.fastapi.services.reference_data import ReferenceDataService
+from app.fastapi.utils.file_utils import PatientDataProcessor, ValidatedFile
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/calculate", tags=["calculations"])
+router = APIRouter(prefix="/api/datasets", tags=["calculations"])
+
+
+async def get_user_dataset(
+    dataset_id: int,
+    current_user: User,
+    session: Session,
+) -> ReferenceDataset:
+    """
+    Get a dataset belonging to the current user.
+
+    Parameters
+    ----------
+    dataset_id : int
+        The dataset ID.
+    current_user : User
+        The authenticated user.
+    session : Session
+        Database session.
+
+    Returns
+    -------
+    ReferenceDataset
+        The dataset.
+
+    Raises
+    ------
+    HTTPException
+        404 if dataset not found.
+    """
+    dataset = session.exec(
+        select(ReferenceDataset).where(
+            ReferenceDataset.id == dataset_id,
+            ReferenceDataset.user_id == current_user.id,
+        )
+    ).first()
+
+    if not dataset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Dataset not found",
+        )
+
+    return dataset
 
 
 async def generate_sse_events(
     service: CalculationService,
     user_id: int,
+    dataset_id: int,
     request: ReferenceCalculationRequest,
-) -> Any:
+) -> AsyncGenerator[str, None]:
     """
     Generate Server-Sent Events for model fitting progress.
 
@@ -53,6 +99,8 @@ async def generate_sse_events(
         The calculation service instance.
     user_id : int
         The user ID.
+    dataset_id : int
+        The dataset ID.
     request : ReferenceCalculationRequest
         The calculation request parameters.
 
@@ -65,6 +113,7 @@ async def generate_sse_events(
 
     async for update in service.fit_reference_models(
         user_id=user_id,
+        dataset_id=dataset_id,
         y_columns=request.y_columns,
         percentiles=request.percentiles,
         criterion="bic",
@@ -115,20 +164,24 @@ async def generate_sse_events(
             yield f"data: {json.dumps(event_data)}\n\n"
 
 
-@router.post("/reference")
-async def calculate_reference_dataset(
+@router.post("/{dataset_id}/fit")
+async def fit_dataset_models(
+    dataset_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     request: ReferenceCalculationRequest,
     session: Session = Depends(get_session),
 ) -> ReferenceCalculationResponse:
     """
-    Fit GAMLSS models for user's reference dataset.
+    Fit GAMLSS models for a dataset's reference data.
 
     This endpoint fits statistical models for each specified brain structure,
-    allowing percentile calculations for patient data.
+    allowing percentile calculations for patient data. Models are persisted
+    to disk for later use.
 
     Parameters
     ----------
+    dataset_id : int
+        The dataset ID to fit models for.
     current_user : User
         The authenticated user.
     request : ReferenceCalculationRequest
@@ -144,17 +197,21 @@ async def calculate_reference_dataset(
     Raises
     ------
     HTTPException
-        404 if no reference data found.
+        404 if dataset not found or has no reference data.
     """
+    # Verify dataset belongs to user
+    dataset = await get_user_dataset(dataset_id, current_user, session)
+
     service = CalculationService(session)
+    reference_service = ReferenceDataService(session)
     start_time = time.time()
 
-    # Check if user has reference data
-    df = service.get_reference_dataframe(current_user.id)
-    if df is None:
+    # Check if dataset has reference data
+    df = reference_service.get_reference_dataframe(dataset_id)
+    if df is None or df.empty:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No reference data found. Please upload data first.",
+            detail=f"No reference data found in dataset '{dataset.name}'. Please upload data first.",
         )
 
     # Fit models (non-streaming version)
@@ -162,8 +219,10 @@ async def calculate_reference_dataset(
     successful_count = 0
     failed_count = 0
 
+    assert current_user.id is not None  # Always exists for authenticated users
     async for update in service.fit_reference_models(
         user_id=current_user.id,
+        dataset_id=dataset_id,
         y_columns=request.y_columns,
         percentiles=request.percentiles,
         criterion="bic",
@@ -197,8 +256,9 @@ async def calculate_reference_dataset(
     )
 
 
-@router.post("/reference/stream")
-async def calculate_reference_dataset_stream(
+@router.post("/{dataset_id}/fit/stream")
+async def fit_dataset_models_stream(
+    dataset_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     request: ReferenceCalculationRequest,
     session: Session = Depends(get_session),
@@ -211,6 +271,8 @@ async def calculate_reference_dataset_stream(
 
     Parameters
     ----------
+    dataset_id : int
+        The dataset ID to fit models for.
     current_user : User
         The authenticated user.
     request : ReferenceCalculationRequest
@@ -226,20 +288,26 @@ async def calculate_reference_dataset_stream(
     Raises
     ------
     HTTPException
-        404 if no reference data found.
+        404 if dataset not found or has no reference data.
     """
-    service = CalculationService(session)
+    # Verify dataset belongs to user
+    dataset = await get_user_dataset(dataset_id, current_user, session)
 
-    # Check if user has reference data
-    df = service.get_reference_dataframe(current_user.id)
-    if df is None:
+    reference_service = ReferenceDataService(session)
+
+    # Check if dataset has reference data
+    df = reference_service.get_reference_dataframe(dataset_id)
+    if df is None or df.empty:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No reference data found. Please upload data first.",
+            detail=f"No reference data found in dataset '{dataset.name}'. Please upload data first.",
         )
 
+    service = CalculationService(session)
+
+    assert current_user.id is not None  # Always exists for authenticated users
     return StreamingResponse(
-        generate_sse_events(service, current_user.id, request),
+        generate_sse_events(service, current_user.id, dataset_id, request),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -249,24 +317,35 @@ async def calculate_reference_dataset_stream(
     )
 
 
-@router.post("/patient")
-async def calculate_patient_percentiles(
+@router.post("/{dataset_id}/calculate")
+async def calculate_oos_percentiles(
+    dataset_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
-    request: PatientCalculationRequest,
+    files: list[ValidatedFile] = Depends(get_validated_files),
+    structures: Annotated[
+        list[str] | None,
+        Query(description="Structures to calculate (None = all available)"),
+    ] = None,
     session: Session = Depends(get_session),
 ) -> PatientCalculationResponse:
     """
-    Calculate percentiles for patients against fitted reference models.
+    Calculate percentiles for out-of-sample patients against fitted models.
 
-    This endpoint computes z-scores and percentiles for specified patients
-    using previously fitted GAMLSS models.
+    Upload patient data files (CSV/XLSX) in the same format as reference data.
+    The endpoint computes z-scores and percentiles for patients using
+    previously fitted GAMLSS models. Patient data is NOT stored - it's
+    processed transiently and results are returned immediately.
 
     Parameters
     ----------
+    dataset_id : int
+        The dataset ID whose models to use for calculation.
     current_user : User
         The authenticated user.
-    request : PatientCalculationRequest
-        The calculation parameters.
+    files : list[ValidatedFile]
+        Uploaded patient data files (CSV/XLSX).
+    structures : list[str] | None
+        Structures to calculate. If None, uses all available models.
     session : Session
         Database session.
 
@@ -278,36 +357,49 @@ async def calculate_patient_percentiles(
     Raises
     ------
     HTTPException
-        404 if no reference data found.
-        400 if no fitted models available.
+        400 if no files provided or files cannot be processed.
+        404 if dataset not found or has no fitted models.
     """
-    service = CalculationService(session)
+    # Verify dataset belongs to user
+    dataset = await get_user_dataset(dataset_id, current_user, session)
 
-    # Check if user has reference data
-    df = service.get_reference_dataframe(current_user.id)
-    if df is None:
+    # Process uploaded files to DataFrames (NOT stored in database)
+    processor = PatientDataProcessor()
+    try:
+        dataframes = processor.process_files(files)
+    except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No reference data found. Please upload data first.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Error processing files: {e}",
+        ) from e
+
+    if not dataframes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No valid patient data found in uploaded files",
         )
 
-    # Get patient IDs from indices
-    patient_ids = None
-    if request.patient_indices:
-        try:
-            patient_ids = df.iloc[request.patient_indices]["PatientID"].tolist()
-        except IndexError as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid patient indices provided.",
-            ) from e
+    # Combine all DataFrames into one
+    patient_df = pd.concat(dataframes, ignore_index=True)
+
+    logger.info(
+        f"Processing {len(patient_df)} OOS patients for dataset {dataset_id} "
+        f"(from {len(files)} files)"
+    )
 
     # Calculate percentiles
+    service = CalculationService(session)
     calc_results = service.calculate_patient_percentiles(
-        user_id=current_user.id,
-        patient_ids=patient_ids,
-        structures=request.y_columns,
+        dataset_id=dataset_id,
+        patient_data=patient_df,
+        structures=structures,
     )
+
+    if not calc_results:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No fitted models found for dataset '{dataset.name}'. Please fit models first.",
+        )
 
     # Convert to response format
     results = [
@@ -338,33 +430,3 @@ async def calculate_patient_percentiles(
         structures_processed=structures_processed,
         errors=errors,
     )
-
-
-@router.get("/structures")
-async def get_available_structures(
-    current_user: Annotated[User, Depends(get_current_user)],
-    session: Session = Depends(get_session),
-) -> dict[str, Any]:
-    """
-    Get list of available brain structures for calculation.
-
-    Parameters
-    ----------
-    current_user : User
-        The authenticated user.
-    session : Session
-        Database session.
-
-    Returns
-    -------
-    dict[str, Any]
-        List of available structure names.
-    """
-    service = CalculationService(session)
-
-    structures = service.get_available_structures(current_user.id)
-
-    return {
-        "structures": structures,
-        "count": len(structures),
-    }

@@ -2,7 +2,7 @@
 Service for GAMLSS model fitting and percentile calculations.
 
 This module handles the core calculation logic for fitting reference models
-and calculating patient percentiles.
+and calculating patient percentiles. Models are persisted to disk.
 """
 
 import logging
@@ -12,12 +12,13 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from app.core.engine.model import GAMLSS, FittedGAMLSSModel
 from app.core.engine.selector import GAMLSSModelSelector
 from app.core.resources.model_candidates import get_all_model_candidates
-from app.fastapi.db.models import PatientRecord, PatientStructureValue
+from app.fastapi.services.model_persistence import ModelPersistenceService
+from app.fastapi.services.reference_data import ReferenceDataService
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +112,7 @@ class CalculationService:
     Handles the core business logic for:
     - Retrieving reference data from the database
     - Fitting GAMLSS models for each brain structure
+    - Persisting models to disk
     - Calculating percentile curves
     - Computing patient z-scores and percentiles
     """
@@ -120,87 +122,13 @@ class CalculationService:
 
     def __init__(self, session: Session):
         self.session = session
-        self._fitted_models: dict[str, FittedGAMLSSModel] = {}
-
-    def get_reference_dataframe(self, user_id: int) -> pd.DataFrame | None:
-        """
-        Retrieve user's reference data from database as a DataFrame.
-
-        Parameters
-        ----------
-        user_id : int
-            The user ID to retrieve data for.
-
-        Returns
-        -------
-        pd.DataFrame | None
-            DataFrame with patient records and structure values,
-            or None if no data exists.
-        """
-        # Get all patient records for user
-        records = self.session.exec(
-            select(PatientRecord).where(PatientRecord.user_id == user_id)
-        ).all()
-
-        if not records:
-            return None
-
-        # Build DataFrame from records
-        data_rows = []
-        for record in records:
-            # Get structure values for this record
-            values = self.session.exec(
-                select(PatientStructureValue).where(
-                    PatientStructureValue.patient_record_id == record.id
-                )
-            ).all()
-
-            row = {
-                "PatientID": record.patient_id,
-                "BirthDate": record.birth_date,
-                "StudyDate": record.study_date,
-                "StudyDescription": record.study_description,
-                "AgeYears": record.age_years,
-                "AgeMonths": record.age_months,
-            }
-
-            # Add structure values
-            for sv in values:
-                row[sv.structure_name] = sv.value
-
-            data_rows.append(row)
-
-        if not data_rows:
-            return None
-
-        return pd.DataFrame(data_rows)
-
-    def get_available_structures(self, user_id: int) -> list[str]:
-        """
-        Get list of available structure columns for a user.
-
-        Parameters
-        ----------
-        user_id : int
-            The user ID to get structures for.
-
-        Returns
-        -------
-        list[str]
-            List of structure column names.
-        """
-        structure_names = self.session.exec(
-            select(PatientStructureValue.structure_name)
-            .join(PatientRecord)
-            .where(PatientRecord.user_id == user_id)
-            .distinct()
-        ).all()
-
-        return list(structure_names)
+        self._reference_service = ReferenceDataService(session)
+        self._persistence_service = ModelPersistenceService(session)
 
     async def fit_reference_models(
         self,
         user_id: int,
+        dataset_id: int,
         y_columns: list[str] | None = None,
         percentiles: list[float] | None = None,
         criterion: str = "bic",
@@ -208,10 +136,14 @@ class CalculationService:
         """
         Fit GAMLSS models for reference data with progress updates.
 
+        Models are automatically persisted to disk after fitting.
+
         Parameters
         ----------
         user_id : int
-            The user ID to fit models for.
+            The user ID (for file path organization).
+        dataset_id : int
+            The dataset ID to fit models for.
         y_columns : list[str] | None
             Structures to fit. If None, fits all available.
         percentiles : list[float] | None
@@ -227,12 +159,12 @@ class CalculationService:
         percentiles = percentiles or self.DEFAULT_PERCENTILES
 
         # Get reference data (caller must ensure data exists)
-        df = self.get_reference_dataframe(user_id)
+        df = self._reference_service.get_reference_dataframe(dataset_id)
         assert df is not None, "Reference data must exist (caller should validate)"
 
         # Determine structures to fit
         if y_columns is None:
-            y_columns = self.get_available_structures(user_id)
+            y_columns = self._reference_service.get_available_structures(dataset_id)
 
         # Filter to columns that exist in the data
         y_columns = [col for col in y_columns if col in df.columns]
@@ -254,7 +186,7 @@ class CalculationService:
             )
 
             try:
-                model_result = self._fit_single_model(
+                model_result, fitted_model = self._fit_single_model(
                     df=df,
                     structure=structure,
                     percentiles=percentiles,
@@ -262,11 +194,15 @@ class CalculationService:
                 )
                 result.results[structure] = model_result
 
-                if model_result.converged:
+                if model_result.converged and fitted_model is not None:
                     result.successful_count += 1
-                    # Store fitted model for later patient calculations
-                    if structure in self._fitted_models:
-                        pass  # Already stored during fitting
+                    # Persist the model
+                    self._persistence_service.save_model(
+                        fitted_model=fitted_model,
+                        user_id=user_id,
+                        dataset_id=dataset_id,
+                        structure=structure,
+                    )
                 else:
                     result.failed_count += 1
 
@@ -287,7 +223,7 @@ class CalculationService:
         structure: str,
         percentiles: list[float],
         criterion: str,
-    ) -> ModelFitResult:
+    ) -> tuple[ModelFitResult, FittedGAMLSSModel | None]:
         """
         Fit a single GAMLSS model for a structure.
 
@@ -304,17 +240,20 @@ class CalculationService:
 
         Returns
         -------
-        ModelFitResult
-            Result of the model fitting.
+        tuple[ModelFitResult, FittedGAMLSSModel | None]
+            Result of the model fitting and the fitted model (if successful).
         """
         # Filter data for this structure (remove NaN values)
         model_df = df[[self.X_COLUMN, structure]].dropna()
 
         if len(model_df) < 10:
-            return ModelFitResult(
-                structure=structure,
-                converged=False,
-                error=f"Insufficient data: {len(model_df)} samples (minimum 10 required)",
+            return (
+                ModelFitResult(
+                    structure=structure,
+                    converged=False,
+                    error=f"Insufficient data: {len(model_df)} samples (minimum 10 required)",
+                ),
+                None,
             )
 
         # Create GAMLSS fitter
@@ -329,18 +268,18 @@ class CalculationService:
         candidates = get_all_model_candidates()
         selector = GAMLSSModelSelector(fitter, candidates)
 
-        # Fit models (without saving to disk for API use)
+        # Fit models
         best_model = selector.fit_models(criterion=criterion)
 
         if best_model is None or not best_model.converged:
-            return ModelFitResult(
-                structure=structure,
-                converged=False,
-                error="No model converged successfully",
+            return (
+                ModelFitResult(
+                    structure=structure,
+                    converged=False,
+                    error="No model converged successfully",
+                ),
+                None,
             )
-
-        # Store fitted model for patient calculations
-        self._fitted_models[structure] = best_model
 
         # Calculate percentile curves
         try:
@@ -366,33 +305,39 @@ class CalculationService:
         except Exception:
             family = None
 
-        return ModelFitResult(
-            structure=structure,
-            converged=True,
-            aic=best_model.aic,
-            bic=best_model.bic,
-            family=family,
-            percentile_curves=percentile_curves,
-            x_values=x_values,
+        return (
+            ModelFitResult(
+                structure=structure,
+                converged=True,
+                aic=best_model.aic,
+                bic=best_model.bic,
+                family=family,
+                percentile_curves=percentile_curves,
+                x_values=x_values,
+            ),
+            best_model,
         )
 
     def calculate_patient_percentiles(
         self,
-        user_id: int,
-        patient_ids: list[str] | None = None,
+        dataset_id: int,
+        patient_data: pd.DataFrame,
         structures: list[str] | None = None,
     ) -> list[PatientPercentileResult]:
         """
-        Calculate percentiles for patients against reference models.
+        Calculate percentiles for out-of-sample patients.
+
+        Loads fitted models from disk and calculates z-scores and percentiles
+        for the provided patient data.
 
         Parameters
         ----------
-        user_id : int
-            The user ID.
-        patient_ids : list[str] | None
-            Patient IDs to calculate. If None, calculates for all.
+        dataset_id : int
+            The dataset ID to use models from.
+        patient_data : pd.DataFrame
+            DataFrame with patient data (must have AgeYears and structure columns).
         structures : list[str] | None
-            Structures to calculate. If None, uses all fitted models.
+            Structures to calculate. If None, uses all available models.
 
         Returns
         -------
@@ -401,36 +346,59 @@ class CalculationService:
         """
         results = []
 
-        # Get patient data
-        df = self.get_reference_dataframe(user_id)
-        if df is None:
+        if patient_data.empty:
             return results
 
-        # Filter patients if specified
-        if patient_ids is not None:
-            df = df[df["PatientID"].isin(patient_ids)]
-
-        if df.empty:
+        # Get reference data for model loading
+        ref_df = self._reference_service.get_reference_dataframe(dataset_id)
+        if ref_df is None:
+            logger.error(f"No reference data found for dataset {dataset_id}")
             return results
+
+        # Get available models
+        available_models = self._persistence_service.get_dataset_models(dataset_id)
+        model_structures = {m.structure for m in available_models}
 
         # Determine structures to calculate
         if structures is None:
-            structures = list(self._fitted_models.keys())
+            structures = list(model_structures)
         else:
-            # Filter to fitted models only
-            structures = [s for s in structures if s in self._fitted_models]
+            structures = [s for s in structures if s in model_structures]
+
+        if not structures:
+            logger.warning(f"No fitted models found for dataset {dataset_id}")
+            return results
+
+        # Load models and calculate percentiles
+        loaded_models: dict[str, FittedGAMLSSModel] = {}
+
+        for structure in structures:
+            model = self._persistence_service.load_model(
+                dataset_id=dataset_id,
+                structure=structure,
+                source_data=ref_df,
+                x_column=self.X_COLUMN,
+                percentiles=self.DEFAULT_PERCENTILES,
+            )
+            if model is not None:
+                loaded_models[structure] = model
 
         # Calculate for each patient-structure combination
-        for _, row in df.iterrows():
-            patient_id = str(row["PatientID"])
-            age = float(row["AgeYears"])
+        for _, row in patient_data.iterrows():
+            patient_id = str(row.get("PatientID", "unknown"))
+            age = row.get(self.X_COLUMN)
+
+            if age is None or pd.isna(age):
+                continue
+
+            age = float(age)
 
             for structure in structures:
-                if structure not in df.columns or pd.isna(row[structure]):
+                if structure not in patient_data.columns or pd.isna(row[structure]):
                     continue
 
                 value = float(row[structure])
-                model = self._fitted_models.get(structure)
+                model = loaded_models.get(structure)
 
                 if model is None:
                     results.append(
@@ -439,7 +407,7 @@ class CalculationService:
                             structure=structure,
                             age=age,
                             value=value,
-                            error="No fitted model available",
+                            error="Model not loaded",
                         )
                     )
                     continue
@@ -480,19 +448,3 @@ class CalculationService:
                     )
 
         return results
-
-    def get_fitted_model(self, structure: str) -> FittedGAMLSSModel | None:
-        """
-        Get a fitted model for a structure.
-
-        Parameters
-        ----------
-        structure : str
-            The structure name.
-
-        Returns
-        -------
-        FittedGAMLSSModel | None
-            The fitted model, or None if not available.
-        """
-        return self._fitted_models.get(structure)

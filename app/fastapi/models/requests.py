@@ -13,9 +13,9 @@ class ReferenceCalculationRequest(BaseModel):
         default="AgeYears", description="Independent variable column name"
     )
 
-    y_columns: list[str] = Field(
-        min_length=1,
-        description="Dependent variable columns to model",
+    y_columns: list[str] | None = Field(
+        default=None,
+        description="Dependent variable columns to model (None = all available)",
     )
 
     percentiles: list[float] = Field(
@@ -38,8 +38,10 @@ class ReferenceCalculationRequest(BaseModel):
 
     @field_validator("y_columns", mode="after")
     @classmethod
-    def validate_y_columns(cls, v: list[str]) -> list[str]:
+    def validate_y_columns(cls, v: list[str] | None) -> list[str] | None:
         """Ensure column names are valid."""
+        if v is None:
+            return v
         for col in v:
             if not col or not col.strip():
                 raise ValueError("Column names cannot be empty")

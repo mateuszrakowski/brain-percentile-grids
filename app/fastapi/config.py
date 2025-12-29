@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     max_files_count: int = 300
     upload_folder: str = "./uploads"
 
+    # Model storage
+    models_dir: str = "./models"
+
     # R environment
     r_home: str | None = None
     r_libs: str | None = None

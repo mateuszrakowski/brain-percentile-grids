@@ -12,7 +12,11 @@ from typing import Any
 import pandas as pd
 from sqlmodel import Session, select
 
-from app.fastapi.db.models import PatientRecord, PatientStructureValue
+from app.fastapi.db.models import (
+    PatientRecord,
+    PatientStructureValue,
+    ReferenceDataset,
+)
 from app.fastapi.utils.file_utils import PatientDataProcessor
 
 logger = logging.getLogger(__name__)
@@ -44,7 +48,8 @@ class ReferenceDataService:
     Service for managing reference dataset operations.
 
     Handles database operations including duplicate detection,
-    batch inserts, and data retrieval.
+    batch inserts, and data retrieval. All operations are scoped
+    to a specific dataset.
     """
 
     def __init__(self, session: Session):
@@ -52,16 +57,18 @@ class ReferenceDataService:
 
     def save_reference_data(
         self,
-        user_id: int,
+        dataset_id: int,
         dataframes: list[pd.DataFrame],
     ) -> ProcessingResult:
         """
         Save processed DataFrames to the database with duplicate detection.
 
+        Duplicates are detected within the dataset scope only.
+
         Parameters
         ----------
-        user_id : int
-            The user ID to associate records with.
+        dataset_id : int
+            The dataset ID to add records to.
         dataframes : list[pd.DataFrame]
             List of processed DataFrames to save.
 
@@ -73,14 +80,14 @@ class ReferenceDataService:
         result = ProcessingResult(files_processed=len(dataframes))
 
         if not dataframes:
-            result.total_records = self._count_user_records(user_id)
+            result.total_records = self._count_dataset_records(dataset_id)
             return result
 
         # Combine all DataFrames
         combined_df = pd.concat(dataframes, ignore_index=True)
 
-        # Get existing records for duplicate detection
-        existing_keys = self._get_existing_keys(user_id)
+        # Get existing records for duplicate detection (scoped to dataset)
+        existing_keys = self._get_existing_keys(dataset_id)
 
         # Filter out duplicates
         if existing_keys:
@@ -91,22 +98,25 @@ class ReferenceDataService:
 
         # Save new records
         if not combined_df.empty:
-            result.records_added = self._insert_records(user_id, combined_df)
+            result.records_added = self._insert_records(dataset_id, combined_df)
             result.structures = PatientDataProcessor.get_structure_columns(combined_df)
+
+            # Update dataset sample count
+            self._update_dataset_sample_count(dataset_id)
 
         self.session.commit()
 
-        result.total_records = self._count_user_records(user_id)
+        result.total_records = self._count_dataset_records(dataset_id)
         return result
 
-    def get_reference_summary(self, user_id: int) -> dict[str, Any] | None:
+    def get_reference_summary(self, dataset_id: int) -> dict[str, Any] | None:
         """
-        Get summary of user's reference dataset.
+        Get summary of a dataset's reference data.
 
         Parameters
         ----------
-        user_id : int
-            The user ID to get data for.
+        dataset_id : int
+            The dataset ID to get data for.
 
         Returns
         -------
@@ -114,7 +124,7 @@ class ReferenceDataService:
             Summary dictionary or None if no data exists.
         """
         records = self.session.exec(
-            select(PatientRecord).where(PatientRecord.user_id == user_id)
+            select(PatientRecord).where(PatientRecord.dataset_id == dataset_id)
         ).all()
 
         if not records:
@@ -123,7 +133,7 @@ class ReferenceDataService:
         structure_names = self.session.exec(
             select(PatientStructureValue.structure_name)
             .join(PatientRecord)
-            .where(PatientRecord.user_id == user_id)
+            .where(PatientRecord.dataset_id == dataset_id)
             .distinct()
         ).all()
 
@@ -140,14 +150,64 @@ class ReferenceDataService:
             ],
         }
 
-    def clear_reference_data(self, user_id: int) -> int:
+    def get_reference_dataframe(self, dataset_id: int) -> pd.DataFrame | None:
         """
-        Clear all reference data for a user.
+        Retrieve dataset's reference data as a DataFrame.
 
         Parameters
         ----------
-        user_id : int
-            The user ID to clear data for.
+        dataset_id : int
+            The dataset ID to retrieve data for.
+
+        Returns
+        -------
+        pd.DataFrame | None
+            DataFrame with patient records and structure values,
+            or None if no data exists.
+        """
+        records = self.session.exec(
+            select(PatientRecord).where(PatientRecord.dataset_id == dataset_id)
+        ).all()
+
+        if not records:
+            return None
+
+        # Build DataFrame from records
+        data_rows = []
+        for record in records:
+            values = self.session.exec(
+                select(PatientStructureValue).where(
+                    PatientStructureValue.patient_record_id == record.id
+                )
+            ).all()
+
+            row = {
+                "PatientID": record.patient_id,
+                "BirthDate": record.birth_date,
+                "StudyDate": record.study_date,
+                "StudyDescription": record.study_description,
+                "AgeYears": record.age_years,
+                "AgeMonths": record.age_months,
+            }
+
+            for sv in values:
+                row[sv.structure_name] = sv.value
+
+            data_rows.append(row)
+
+        if not data_rows:
+            return None
+
+        return pd.DataFrame(data_rows)
+
+    def clear_reference_data(self, dataset_id: int) -> int:
+        """
+        Clear all reference data for a dataset.
+
+        Parameters
+        ----------
+        dataset_id : int
+            The dataset ID to clear data for.
 
         Returns
         -------
@@ -155,23 +215,60 @@ class ReferenceDataService:
             Number of records deleted.
         """
         records = self.session.exec(
-            select(PatientRecord).where(PatientRecord.user_id == user_id)
+            select(PatientRecord).where(PatientRecord.dataset_id == dataset_id)
         ).all()
 
+        # Delete structure values first
+        for record in records:
+            values = self.session.exec(
+                select(PatientStructureValue).where(
+                    PatientStructureValue.patient_record_id == record.id
+                )
+            ).all()
+            for value in values:
+                self.session.delete(value)
+
+        # Then delete records
         for record in records:
             self.session.delete(record)
+
+        # Update dataset sample count
+        self._update_dataset_sample_count(dataset_id, count=0)
 
         self.session.commit()
         return len(records)
 
-    def _get_existing_keys(self, user_id: int) -> set[str]:
+    def get_available_structures(self, dataset_id: int) -> list[str]:
         """
-        Get composite keys for existing records.
+        Get list of available structure columns for a dataset.
 
         Parameters
         ----------
-        user_id : int
-            The user ID to get keys for.
+        dataset_id : int
+            The dataset ID to get structures for.
+
+        Returns
+        -------
+        list[str]
+            List of structure column names.
+        """
+        structure_names = self.session.exec(
+            select(PatientStructureValue.structure_name)
+            .join(PatientRecord)
+            .where(PatientRecord.dataset_id == dataset_id)
+            .distinct()
+        ).all()
+
+        return list(structure_names)
+
+    def _get_existing_keys(self, dataset_id: int) -> set[str]:
+        """
+        Get composite keys for existing records in a dataset.
+
+        Parameters
+        ----------
+        dataset_id : int
+            The dataset ID to get keys for.
 
         Returns
         -------
@@ -179,7 +276,7 @@ class ReferenceDataService:
             Set of composite keys (PatientID_StudyDate_StudyDescription).
         """
         records = self.session.exec(
-            select(PatientRecord).where(PatientRecord.user_id == user_id)
+            select(PatientRecord).where(PatientRecord.dataset_id == dataset_id)
         ).all()
 
         return {
@@ -225,14 +322,14 @@ class ReferenceDataService:
 
         return df, int(duplicates_count)
 
-    def _insert_records(self, user_id: int, df: pd.DataFrame) -> int:
+    def _insert_records(self, dataset_id: int, df: pd.DataFrame) -> int:
         """
         Insert patient records and structure values into the database.
 
         Parameters
         ----------
-        user_id : int
-            The user ID to associate records with.
+        dataset_id : int
+            The dataset ID to add records to.
         df : pd.DataFrame
             DataFrame containing patient data.
 
@@ -251,7 +348,7 @@ class ReferenceDataService:
 
             # Create patient record with pre-calculated age
             patient_record = PatientRecord(
-                user_id=user_id,
+                dataset_id=dataset_id,
                 patient_id=str(row.get("PatientID", "")),
                 birth_date=str(row.get("BirthDate", "")),
                 study_date=str(row.get("StudyDate", "")),
@@ -278,9 +375,24 @@ class ReferenceDataService:
         logger.info(f"Inserted {records_added} patient records")
         return records_added
 
-    def _count_user_records(self, user_id: int) -> int:
-        """Count total records for a user."""
+    def _count_dataset_records(self, dataset_id: int) -> int:
+        """Count total records for a dataset."""
         records = self.session.exec(
-            select(PatientRecord).where(PatientRecord.user_id == user_id)
+            select(PatientRecord).where(PatientRecord.dataset_id == dataset_id)
         ).all()
         return len(records)
+
+    def _update_dataset_sample_count(
+        self, dataset_id: int, count: int | None = None
+    ) -> None:
+        """Update the sample count on the dataset record."""
+        dataset = self.session.exec(
+            select(ReferenceDataset).where(ReferenceDataset.id == dataset_id)
+        ).first()
+
+        if dataset:
+            if count is not None:
+                dataset.sample_count = count
+            else:
+                dataset.sample_count = self._count_dataset_records(dataset_id)
+            self.session.add(dataset)

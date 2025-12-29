@@ -261,10 +261,11 @@ async def health_check() -> HealthResponse:
 
 
 # Include routers
-from .routers import auth, calculations, data, health  # noqa: E402
+from .routers import auth, calculations, data, datasets, health  # noqa: E402
 
 app.include_router(health.router)
 app.include_router(auth.router)
+app.include_router(datasets.router)
 app.include_router(data.router)
 app.include_router(calculations.router)
 

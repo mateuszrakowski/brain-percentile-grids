@@ -51,6 +51,9 @@ cache/
 # Uploads
 uploads/
 
+# Fitted models
+models/
+
 # Logs
 *.log
 
