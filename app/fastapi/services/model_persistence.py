@@ -116,7 +116,8 @@ class ModelPersistenceService:
         # Get model family
         try:
             family = str(fitted_model.model.rx2("family")[0])
-        except Exception:
+        except (AttributeError, IndexError, KeyError, TypeError) as e:
+            logger.debug(f"Could not extract model family: {e}")
             family = "unknown"
 
         # Check for existing record and update or create
@@ -233,6 +234,24 @@ class ModelPersistenceService:
             ).all()
         )
 
+    def delete_model_files(self, user_id: int, dataset_id: int) -> None:
+        """
+        Delete model files from disk (not database records).
+
+        Use this when cascade delete handles DB records.
+
+        Parameters
+        ----------
+        user_id : int
+            The user ID.
+        dataset_id : int
+            The dataset ID.
+        """
+        model_dir = self._get_model_directory(user_id, dataset_id)
+        if model_dir.exists():
+            shutil.rmtree(model_dir)
+            logger.info(f"Deleted model directory: {model_dir}")
+
     def delete_dataset_models(self, user_id: int, dataset_id: int) -> int:
         """
         Delete all models for a dataset (files and database records).
@@ -258,11 +277,8 @@ class ModelPersistenceService:
 
         self.session.commit()
 
-        # Delete model directory
-        model_dir = self._get_model_directory(user_id, dataset_id)
-        if model_dir.exists():
-            shutil.rmtree(model_dir)
-            logger.info(f"Deleted model directory: {model_dir}")
+        # Delete model files
+        self.delete_model_files(user_id, dataset_id)
 
         return len(models)
 

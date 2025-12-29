@@ -3,11 +3,15 @@ Shared dependencies for FastAPI endpoints.
 """
 
 import time
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import Depends, File, HTTPException, Request, UploadFile
+from fastapi import Depends, File, HTTPException, Request, UploadFile, status
+from sqlmodel import Session, select
 
+from .auth.dependencies import get_current_user
 from .config import Settings, get_settings
+from .db.database import get_session
+from .db.models import ReferenceDataset, User
 from .utils.file_utils import ValidatedFile
 
 
@@ -148,3 +152,49 @@ class PaginationParams:
         """
         self.skip = skip
         self.limit = min(limit, 1000)  # Cap at 1000
+
+
+async def get_user_dataset(
+    dataset_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[Session, Depends(get_session)],
+) -> ReferenceDataset:
+    """
+    Get a dataset belonging to the current user.
+
+    This is a shared dependency that validates dataset ownership
+    and returns the dataset if it belongs to the authenticated user.
+
+    Parameters
+    ----------
+    dataset_id : int
+        The dataset ID from the path parameter.
+    current_user : User
+        The authenticated user from JWT token.
+    session : Session
+        Database session.
+
+    Returns
+    -------
+    ReferenceDataset
+        The dataset if it exists and belongs to the user.
+
+    Raises
+    ------
+    HTTPException
+        404 if dataset not found or doesn't belong to user.
+    """
+    dataset = session.exec(
+        select(ReferenceDataset).where(
+            ReferenceDataset.id == dataset_id,
+            ReferenceDataset.user_id == current_user.id,
+        )
+    ).first()
+
+    if not dataset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Dataset not found",
+        )
+
+    return dataset

@@ -117,8 +117,11 @@ class CalculationService:
     - Computing patient z-scores and percentiles
     """
 
+    # Configuration constants
     DEFAULT_PERCENTILES = [0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95]
     X_COLUMN = "AgeYears"
+    MIN_SAMPLES_FOR_MODEL = 10
+    PERCENTILE_CURVE_POINTS = 200
 
     def __init__(self, session: Session):
         self.session = session
@@ -158,9 +161,13 @@ class CalculationService:
         """
         percentiles = percentiles or self.DEFAULT_PERCENTILES
 
-        # Get reference data (caller must ensure data exists)
+        # Get reference data
         df = self._reference_service.get_reference_dataframe(dataset_id)
-        assert df is not None, "Reference data must exist (caller should validate)"
+        if df is None:
+            raise ValueError(
+                f"No reference data found for dataset {dataset_id}. "
+                "Caller should validate data exists before fitting."
+            )
 
         # Determine structures to fit
         if y_columns is None:
@@ -246,12 +253,15 @@ class CalculationService:
         # Filter data for this structure (remove NaN values)
         model_df = df[[self.X_COLUMN, structure]].dropna()
 
-        if len(model_df) < 10:
+        if len(model_df) < self.MIN_SAMPLES_FOR_MODEL:
             return (
                 ModelFitResult(
                     structure=structure,
                     converged=False,
-                    error=f"Insufficient data: {len(model_df)} samples (minimum 10 required)",
+                    error=(
+                        f"Insufficient data: {len(model_df)} samples "
+                        f"(minimum {self.MIN_SAMPLES_FOR_MODEL} required)"
+                    ),
                 ),
                 None,
             )
@@ -292,18 +302,19 @@ class CalculationService:
             x_values = np.linspace(
                 model_df[self.X_COLUMN].min(),
                 model_df[self.X_COLUMN].max(),
-                200,
+                self.PERCENTILE_CURVE_POINTS,
             ).tolist()
 
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             logger.warning(f"Could not calculate percentiles for {structure}: {e}")
             percentile_curves = None
             x_values = None
 
         try:
             family = str(best_model.model.rx2("family")[0])
-        except Exception:
-            family = None
+        except (AttributeError, IndexError, KeyError, TypeError) as e:
+            logger.debug(f"Could not extract model family: {e}")
+            family = "unknown"
 
         return (
             ModelFitResult(

@@ -67,17 +67,36 @@ class Settings(BaseSettings):
 
     @field_validator("cors_origins", mode="before")
     @classmethod
-    def parse_cors_origins(cls, v):
-        """Parse comma-separated CORS origins from environment variable."""
+    def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
+        """
+        Parse comma-separated CORS origins from environment variable.
+
+        Parameters
+        ----------
+        v : str | list[str]
+            Either a comma-separated string or a list of origins.
+
+        Returns
+        -------
+        list[str]
+            List of CORS origin URLs.
+        """
         if isinstance(v, str):
             return [x.strip() for x in v.split(",")]
         return v
 
 
 @lru_cache
-def get_settings():
+def get_settings() -> Settings:
     """
     Create cached settings instance.
+
     Use this function to get settings throughout the app.
+    The result is cached using lru_cache for performance.
+
+    Returns
+    -------
+    Settings
+        The application settings instance.
     """
     return Settings()

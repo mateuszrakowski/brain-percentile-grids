@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import UniqueConstraint
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, Relationship, SQLModel
 
 
 class User(SQLModel, table=True):
@@ -10,7 +10,10 @@ class User(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     username: str = Field(unique=True, index=True)
     hashed_password: str
-    created_at: datetime = Field(default_factory=datetime.now)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    # Relationships
+    datasets: list["ReferenceDataset"] = Relationship(back_populates="user")
 
 
 class ReferenceDataset(SQLModel, table=True):
@@ -26,10 +29,21 @@ class ReferenceDataset(SQLModel, table=True):
     name: str = Field(index=True)
     description: str | None = None
     sample_count: int = Field(default=0)
-    created_at: datetime = Field(default_factory=datetime.now)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     __table_args__ = (
         UniqueConstraint("user_id", "name", name="unique_dataset_name_per_user"),
+    )
+
+    # Relationships
+    user: User = Relationship(back_populates="datasets")
+    patients: list["PatientRecord"] = Relationship(
+        back_populates="dataset",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
+    fitted_models: list["FittedModel"] = Relationship(
+        back_populates="dataset",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
 
 
@@ -44,7 +58,7 @@ class PatientRecord(SQLModel, table=True):
     study_description: str | None = None
     age_years: int | None = None
     age_months: int | None = None
-    created_at: datetime = Field(default_factory=datetime.now)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     __table_args__ = (
         UniqueConstraint(
@@ -55,6 +69,13 @@ class PatientRecord(SQLModel, table=True):
         ),
     )
 
+    # Relationships
+    dataset: ReferenceDataset = Relationship(back_populates="patients")
+    structure_values: list["PatientStructureValue"] = Relationship(
+        back_populates="patient_record",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
+
 
 class PatientStructureValue(SQLModel, table=True):
     """Brain structure volume value for a patient record."""
@@ -63,6 +84,9 @@ class PatientStructureValue(SQLModel, table=True):
     patient_record_id: int = Field(foreign_key="patientrecord.id", index=True)
     structure_name: str = Field(index=True)
     value: float
+
+    # Relationships
+    patient_record: PatientRecord = Relationship(back_populates="structure_values")
 
 
 class FittedModel(SQLModel, table=True):
@@ -79,7 +103,7 @@ class FittedModel(SQLModel, table=True):
     aic: float
     bic: float
     file_path: str  # Path to .rds file
-    created_at: datetime = Field(default_factory=datetime.now)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     __table_args__ = (
         UniqueConstraint(
@@ -88,3 +112,6 @@ class FittedModel(SQLModel, table=True):
             name="unique_model_per_dataset_structure",
         ),
     )
+
+    # Relationships
+    dataset: ReferenceDataset = Relationship(back_populates="fitted_models")

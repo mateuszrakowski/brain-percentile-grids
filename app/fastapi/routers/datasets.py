@@ -5,7 +5,7 @@ Provides endpoints for creating, listing, and managing reference datasets
 that contain patient records and fitted models.
 """
 
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -20,6 +20,7 @@ from app.fastapi.db.models import (
     ReferenceDataset,
     User,
 )
+from app.fastapi.dependencies import get_user_dataset
 from app.fastapi.services.model_persistence import ModelPersistenceService
 
 router = APIRouter(prefix="/api/datasets", tags=["datasets"])
@@ -79,6 +80,15 @@ class DatasetDetailResponse(BaseModel):
     created_at: str
     structures: list[str]
     models: list[ModelInfo]
+
+
+class DeleteDatasetResponse(BaseModel):
+    """Response model for dataset deletion."""
+
+    message: str
+    patients_deleted: int
+    models_deleted: int
+    values_deleted: int
 
 
 @router.post("", response_model=DatasetResponse)
@@ -205,8 +215,7 @@ async def list_datasets(
 
 @router.get("/{dataset_id}", response_model=DatasetDetailResponse)
 async def get_dataset(
-    dataset_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
+    dataset: Annotated[ReferenceDataset, Depends(get_user_dataset)],
     session: Session = Depends(get_session),
 ) -> DatasetDetailResponse:
     """
@@ -214,10 +223,8 @@ async def get_dataset(
 
     Parameters
     ----------
-    dataset_id : int
-        The dataset ID.
-    current_user : User
-        The authenticated user.
+    dataset : ReferenceDataset
+        The validated dataset (injected via dependency).
     session : Session
         Database session.
 
@@ -231,30 +238,17 @@ async def get_dataset(
     HTTPException
         404 if dataset not found.
     """
-    dataset = session.exec(
-        select(ReferenceDataset).where(
-            ReferenceDataset.id == dataset_id,
-            ReferenceDataset.user_id == current_user.id,
-        )
-    ).first()
-
-    if not dataset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Dataset not found",
-        )
-
     # Get structures
     structures = session.exec(
         select(PatientStructureValue.structure_name)
         .join(PatientRecord)
-        .where(PatientRecord.dataset_id == dataset_id)
+        .where(PatientRecord.dataset_id == dataset.id)
         .distinct()
     ).all()
 
     # Get models
     models = session.exec(
-        select(FittedModel).where(FittedModel.dataset_id == dataset_id)
+        select(FittedModel).where(FittedModel.dataset_id == dataset.id)
     ).all()
 
     model_infos = [
@@ -281,9 +275,8 @@ async def get_dataset(
 
 @router.patch("/{dataset_id}", response_model=DatasetResponse)
 async def update_dataset(
-    dataset_id: int,
+    dataset: Annotated[ReferenceDataset, Depends(get_user_dataset)],
     request: DatasetUpdate,
-    current_user: Annotated[User, Depends(get_current_user)],
     session: Session = Depends(get_session),
 ) -> DatasetResponse:
     """
@@ -291,12 +284,10 @@ async def update_dataset(
 
     Parameters
     ----------
-    dataset_id : int
-        The dataset ID.
+    dataset : ReferenceDataset
+        The validated dataset (injected via dependency).
     request : DatasetUpdate
         The update request.
-    current_user : User
-        The authenticated user.
     session : Session
         Database session.
 
@@ -311,24 +302,11 @@ async def update_dataset(
         404 if dataset not found.
         409 if new name conflicts with existing dataset.
     """
-    dataset = session.exec(
-        select(ReferenceDataset).where(
-            ReferenceDataset.id == dataset_id,
-            ReferenceDataset.user_id == current_user.id,
-        )
-    ).first()
-
-    if not dataset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Dataset not found",
-        )
-
     # Check name uniqueness if changing
     if request.name and request.name != dataset.name:
         existing = session.exec(
             select(ReferenceDataset).where(
-                ReferenceDataset.user_id == current_user.id,
+                ReferenceDataset.user_id == dataset.user_id,
                 ReferenceDataset.name == request.name,
             )
         ).first()
@@ -350,14 +328,14 @@ async def update_dataset(
     structures = session.exec(
         select(PatientStructureValue.structure_name)
         .join(PatientRecord)
-        .where(PatientRecord.dataset_id == dataset_id)
+        .where(PatientRecord.dataset_id == dataset.id)
         .distinct()
     ).all()
 
     # Check if has models
     has_models = (
         session.exec(
-            select(FittedModel).where(FittedModel.dataset_id == dataset_id)
+            select(FittedModel).where(FittedModel.dataset_id == dataset.id)
         ).first()
         is not None
     )
@@ -373,27 +351,28 @@ async def update_dataset(
     )
 
 
-@router.delete("/{dataset_id}")
+@router.delete("/{dataset_id}", response_model=DeleteDatasetResponse)
 async def delete_dataset(
-    dataset_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
+    dataset: Annotated[ReferenceDataset, Depends(get_user_dataset)],
     session: Session = Depends(get_session),
-) -> dict[str, Any]:
+) -> DeleteDatasetResponse:
     """
     Delete a dataset and all its data (patients, models).
 
+    Uses SQLModel cascade relationships to automatically delete
+    related patient records, structure values, and model records.
+    Model files (.rds) are deleted separately via ModelPersistenceService.
+
     Parameters
     ----------
-    dataset_id : int
-        The dataset ID.
-    current_user : User
-        The authenticated user.
+    dataset : ReferenceDataset
+        The validated dataset (injected via dependency).
     session : Session
         Database session.
 
     Returns
     -------
-    dict[str, Any]
+    DeleteDatasetResponse
         Confirmation message with deletion counts.
 
     Raises
@@ -401,51 +380,24 @@ async def delete_dataset(
     HTTPException
         404 if dataset not found.
     """
-    dataset = session.exec(
-        select(ReferenceDataset).where(
-            ReferenceDataset.id == dataset_id,
-            ReferenceDataset.user_id == current_user.id,
-        )
-    ).first()
+    dataset_name = dataset.name
 
-    if not dataset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Dataset not found",
-        )
+    # Count records before deletion (for response)
+    patients_deleted = len(dataset.patients)
+    values_deleted = sum(len(p.structure_values) for p in dataset.patients)
+    models_deleted = len(dataset.fitted_models)
 
-    # Delete models (files and DB records)
+    # Delete model files from disk (cascade only handles DB records)
     model_service = ModelPersistenceService(session)
-    models_deleted = model_service.delete_dataset_models(current_user.id, dataset_id)
+    model_service.delete_model_files(dataset.user_id, dataset.id)
 
-    # Delete patient structure values
-    patient_records = session.exec(
-        select(PatientRecord).where(PatientRecord.dataset_id == dataset_id)
-    ).all()
-
-    values_deleted = 0
-    for record in patient_records:
-        values = session.exec(
-            select(PatientStructureValue).where(
-                PatientStructureValue.patient_record_id == record.id
-            )
-        ).all()
-        for value in values:
-            session.delete(value)
-            values_deleted += 1
-
-    # Delete patient records
-    patients_deleted = len(patient_records)
-    for record in patient_records:
-        session.delete(record)
-
-    # Delete dataset
+    # Delete dataset - cascade deletes patients, structure_values, fitted_models
     session.delete(dataset)
     session.commit()
 
-    return {
-        "message": f"Dataset '{dataset.name}' deleted",
-        "patients_deleted": patients_deleted,
-        "models_deleted": models_deleted,
-        "values_deleted": values_deleted,
-    }
+    return DeleteDatasetResponse(
+        message=f"Dataset '{dataset_name}' deleted",
+        patients_deleted=patients_deleted,
+        models_deleted=models_deleted,
+        values_deleted=values_deleted,
+    )

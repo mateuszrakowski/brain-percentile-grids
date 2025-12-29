@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import pandas as pd
+from sqlalchemy import delete as sa_delete
+from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
 from app.fastapi.db.models import (
@@ -154,6 +156,8 @@ class ReferenceDataService:
         """
         Retrieve dataset's reference data as a DataFrame.
 
+        Uses eager loading to avoid N+1 query problem.
+
         Parameters
         ----------
         dataset_id : int
@@ -165,22 +169,19 @@ class ReferenceDataService:
             DataFrame with patient records and structure values,
             or None if no data exists.
         """
+        # Use eager loading to fetch all structure values in a single query
         records = self.session.exec(
-            select(PatientRecord).where(PatientRecord.dataset_id == dataset_id)
+            select(PatientRecord)
+            .where(PatientRecord.dataset_id == dataset_id)
+            .options(selectinload(PatientRecord.structure_values))
         ).all()
 
         if not records:
             return None
 
-        # Build DataFrame from records
+        # Build DataFrame from records (structure_values already loaded)
         data_rows = []
         for record in records:
-            values = self.session.exec(
-                select(PatientStructureValue).where(
-                    PatientStructureValue.patient_record_id == record.id
-                )
-            ).all()
-
             row = {
                 "PatientID": record.patient_id,
                 "BirthDate": record.birth_date,
@@ -190,7 +191,7 @@ class ReferenceDataService:
                 "AgeMonths": record.age_months,
             }
 
-            for sv in values:
+            for sv in record.structure_values:
                 row[sv.structure_name] = sv.value
 
             data_rows.append(row)
@@ -204,6 +205,8 @@ class ReferenceDataService:
         """
         Clear all reference data for a dataset.
 
+        Uses bulk delete for efficient database operations.
+
         Parameters
         ----------
         dataset_id : int
@@ -214,29 +217,31 @@ class ReferenceDataService:
         int
             Number of records deleted.
         """
+        # Get record IDs for counting
         records = self.session.exec(
             select(PatientRecord).where(PatientRecord.dataset_id == dataset_id)
         ).all()
+        record_ids = [r.id for r in records]
+        record_count = len(record_ids)
 
-        # Delete structure values first
-        for record in records:
-            values = self.session.exec(
-                select(PatientStructureValue).where(
-                    PatientStructureValue.patient_record_id == record.id
+        if record_ids:
+            # Bulk delete structure values first (foreign key constraint)
+            self.session.exec(
+                sa_delete(PatientStructureValue).where(
+                    PatientStructureValue.patient_record_id.in_(record_ids)
                 )
-            ).all()
-            for value in values:
-                self.session.delete(value)
+            )
 
-        # Then delete records
-        for record in records:
-            self.session.delete(record)
+            # Bulk delete patient records
+            self.session.exec(
+                sa_delete(PatientRecord).where(PatientRecord.dataset_id == dataset_id)
+            )
 
         # Update dataset sample count
         self._update_dataset_sample_count(dataset_id, count=0)
 
         self.session.commit()
-        return len(records)
+        return record_count
 
     def get_available_structures(self, dataset_id: int) -> list[str]:
         """

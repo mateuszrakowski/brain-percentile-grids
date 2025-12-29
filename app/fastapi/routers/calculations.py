@@ -15,12 +15,11 @@ from typing import Annotated
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
-from sqlmodel import Session, select
+from sqlmodel import Session
 
-from app.fastapi.auth.dependencies import get_current_user
 from app.fastapi.db.database import get_session
-from app.fastapi.db.models import ReferenceDataset, User
-from app.fastapi.dependencies import get_validated_files
+from app.fastapi.db.models import ReferenceDataset
+from app.fastapi.dependencies import get_user_dataset, get_validated_files
 from app.fastapi.models.requests import ReferenceCalculationRequest
 from app.fastapi.models.responses import (
     ModelResult,
@@ -39,49 +38,6 @@ from app.fastapi.utils.file_utils import PatientDataProcessor, ValidatedFile
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/datasets", tags=["calculations"])
-
-
-async def get_user_dataset(
-    dataset_id: int,
-    current_user: User,
-    session: Session,
-) -> ReferenceDataset:
-    """
-    Get a dataset belonging to the current user.
-
-    Parameters
-    ----------
-    dataset_id : int
-        The dataset ID.
-    current_user : User
-        The authenticated user.
-    session : Session
-        Database session.
-
-    Returns
-    -------
-    ReferenceDataset
-        The dataset.
-
-    Raises
-    ------
-    HTTPException
-        404 if dataset not found.
-    """
-    dataset = session.exec(
-        select(ReferenceDataset).where(
-            ReferenceDataset.id == dataset_id,
-            ReferenceDataset.user_id == current_user.id,
-        )
-    ).first()
-
-    if not dataset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Dataset not found",
-        )
-
-    return dataset
 
 
 async def generate_sse_events(
@@ -166,8 +122,7 @@ async def generate_sse_events(
 
 @router.post("/{dataset_id}/fit")
 async def fit_dataset_models(
-    dataset_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
+    dataset: Annotated[ReferenceDataset, Depends(get_user_dataset)],
     request: ReferenceCalculationRequest,
     session: Session = Depends(get_session),
 ) -> ReferenceCalculationResponse:
@@ -180,10 +135,8 @@ async def fit_dataset_models(
 
     Parameters
     ----------
-    dataset_id : int
-        The dataset ID to fit models for.
-    current_user : User
-        The authenticated user.
+    dataset : ReferenceDataset
+        The validated dataset (injected via dependency).
     request : ReferenceCalculationRequest
         The calculation parameters.
     session : Session
@@ -199,15 +152,12 @@ async def fit_dataset_models(
     HTTPException
         404 if dataset not found or has no reference data.
     """
-    # Verify dataset belongs to user
-    dataset = await get_user_dataset(dataset_id, current_user, session)
-
     service = CalculationService(session)
     reference_service = ReferenceDataService(session)
     start_time = time.time()
 
     # Check if dataset has reference data
-    df = reference_service.get_reference_dataframe(dataset_id)
+    df = reference_service.get_reference_dataframe(dataset.id)
     if df is None or df.empty:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -219,10 +169,9 @@ async def fit_dataset_models(
     successful_count = 0
     failed_count = 0
 
-    assert current_user.id is not None  # Always exists for authenticated users
     async for update in service.fit_reference_models(
-        user_id=current_user.id,
-        dataset_id=dataset_id,
+        user_id=dataset.user_id,
+        dataset_id=dataset.id,
         y_columns=request.y_columns,
         percentiles=request.percentiles,
         criterion="bic",
@@ -258,8 +207,7 @@ async def fit_dataset_models(
 
 @router.post("/{dataset_id}/fit/stream")
 async def fit_dataset_models_stream(
-    dataset_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
+    dataset: Annotated[ReferenceDataset, Depends(get_user_dataset)],
     request: ReferenceCalculationRequest,
     session: Session = Depends(get_session),
 ) -> StreamingResponse:
@@ -271,10 +219,8 @@ async def fit_dataset_models_stream(
 
     Parameters
     ----------
-    dataset_id : int
-        The dataset ID to fit models for.
-    current_user : User
-        The authenticated user.
+    dataset : ReferenceDataset
+        The validated dataset (injected via dependency).
     request : ReferenceCalculationRequest
         The calculation parameters.
     session : Session
@@ -290,13 +236,10 @@ async def fit_dataset_models_stream(
     HTTPException
         404 if dataset not found or has no reference data.
     """
-    # Verify dataset belongs to user
-    dataset = await get_user_dataset(dataset_id, current_user, session)
-
     reference_service = ReferenceDataService(session)
 
     # Check if dataset has reference data
-    df = reference_service.get_reference_dataframe(dataset_id)
+    df = reference_service.get_reference_dataframe(dataset.id)
     if df is None or df.empty:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -305,9 +248,8 @@ async def fit_dataset_models_stream(
 
     service = CalculationService(session)
 
-    assert current_user.id is not None  # Always exists for authenticated users
     return StreamingResponse(
-        generate_sse_events(service, current_user.id, dataset_id, request),
+        generate_sse_events(service, dataset.user_id, dataset.id, request),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -319,8 +261,7 @@ async def fit_dataset_models_stream(
 
 @router.post("/{dataset_id}/calculate")
 async def calculate_oos_percentiles(
-    dataset_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
+    dataset: Annotated[ReferenceDataset, Depends(get_user_dataset)],
     files: list[ValidatedFile] = Depends(get_validated_files),
     structures: Annotated[
         list[str] | None,
@@ -338,10 +279,8 @@ async def calculate_oos_percentiles(
 
     Parameters
     ----------
-    dataset_id : int
-        The dataset ID whose models to use for calculation.
-    current_user : User
-        The authenticated user.
+    dataset : ReferenceDataset
+        The validated dataset (injected via dependency).
     files : list[ValidatedFile]
         Uploaded patient data files (CSV/XLSX).
     structures : list[str] | None
@@ -360,8 +299,6 @@ async def calculate_oos_percentiles(
         400 if no files provided or files cannot be processed.
         404 if dataset not found or has no fitted models.
     """
-    # Verify dataset belongs to user
-    dataset = await get_user_dataset(dataset_id, current_user, session)
 
     # Process uploaded files to DataFrames (NOT stored in database)
     processor = PatientDataProcessor()
@@ -383,14 +320,14 @@ async def calculate_oos_percentiles(
     patient_df = pd.concat(dataframes, ignore_index=True)
 
     logger.info(
-        f"Processing {len(patient_df)} OOS patients for dataset {dataset_id} "
+        f"Processing {len(patient_df)} OOS patients for dataset {dataset.id} "
         f"(from {len(files)} files)"
     )
 
     # Calculate percentiles
     service = CalculationService(session)
     calc_results = service.calculate_patient_percentiles(
-        dataset_id=dataset_id,
+        dataset_id=dataset.id,
         patient_data=patient_df,
         structures=structures,
     )
