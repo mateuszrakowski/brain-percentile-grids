@@ -5,7 +5,7 @@ Shared dependencies for FastAPI endpoints.
 import time
 from typing import Annotated, Any
 
-from fastapi import Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import Depends, File, HTTPException, UploadFile, status
 from sqlmodel import Session, select
 
 from .auth.dependencies import get_current_user
@@ -13,23 +13,6 @@ from .config import Settings, get_settings
 from .db.database import get_session
 from .db.models import ReferenceDataset, User
 from .utils.file_utils import ValidatedFile
-
-
-async def get_request_id(request: Request) -> str:
-    """
-    Get request ID for tracking.
-
-    Parameters
-    ----------
-    request : Request
-        The FastAPI request object.
-
-    Returns
-    -------
-    str
-        Request ID or 'unknown' if not set.
-    """
-    return getattr(request.state, "request_id", "unknown")
 
 
 async def get_system_metrics() -> dict[str, Any]:
@@ -81,7 +64,6 @@ async def get_validated_files(
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
 
-    # Check file count
     if len(files) > settings.max_files_count:
         raise HTTPException(
             status_code=400,
@@ -90,11 +72,9 @@ async def get_validated_files(
 
     validated = []
     for file in files:
-        # Check filename
         if not file.filename:
             raise HTTPException(status_code=400, detail="File missing filename")
 
-        # Check extension
         if not any(
             file.filename.lower().endswith(ext) for ext in settings.allowed_extensions
         ):
@@ -104,10 +84,8 @@ async def get_validated_files(
                 f"Allowed: {settings.allowed_extensions}",
             )
 
-        # Read content
         content = await file.read()
 
-        # Check size
         if len(content) > settings.max_upload_size:
             raise HTTPException(
                 status_code=400,
@@ -115,7 +93,6 @@ async def get_validated_files(
                 f"Max size: {settings.max_upload_size} bytes",
             )
 
-        # Check not empty
         if len(content) == 0:
             raise HTTPException(
                 status_code=400, detail=f"File is empty: {file.filename}"
@@ -124,34 +101,6 @@ async def get_validated_files(
         validated.append(ValidatedFile(file, content))
 
     return validated
-
-
-# Dependency for pagination
-class PaginationParams:
-    """
-    Common pagination parameters.
-
-    Attributes
-    ----------
-    skip : int
-        Number of items to skip.
-    limit : int
-        Maximum number of items to return (capped at 1000).
-    """
-
-    def __init__(self, skip: int = 0, limit: int = 100):
-        """
-        Initialize pagination parameters.
-
-        Parameters
-        ----------
-        skip : int, optional
-            Number of items to skip.
-        limit : int, optional
-            Maximum number of items to return.
-        """
-        self.skip = skip
-        self.limit = min(limit, 1000)  # Cap at 1000
 
 
 async def get_user_dataset(

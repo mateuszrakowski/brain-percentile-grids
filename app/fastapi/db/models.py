@@ -99,10 +99,10 @@ class FittedModel(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     dataset_id: int = Field(foreign_key="referencedataset.id", index=True)
     structure: str = Field(index=True)
-    family: str  # e.g., "NO", "LOGNO", "BCT"
+    family: str
     aic: float
     bic: float
-    file_path: str  # Path to .rds file
+    file_path: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     __table_args__ = (

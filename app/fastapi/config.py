@@ -32,6 +32,7 @@ class Settings(BaseSettings):
         default="your-secret-key-change-in-production",
         validation_alias=AliasChoices("SECRET_KEY", "SECRET_KEY_DEV"),
     )
+    access_token_expire_minutes: int = 30
 
     # CORS settings
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5000"]
@@ -49,14 +50,6 @@ class Settings(BaseSettings):
     # R environment
     r_home: str | None = None
     r_libs: str | None = None
-
-    # Redis settings (for production)
-    redis_url: str | None = None
-    redis_ttl: int = 86400  # 24 hours
-
-    # Worker settings
-    background_task_timeout: int = 600  # 10 minutes
-    max_workers: int = 4  # For thread pool executor
 
     # Pydantic configuration
     model_config = SettingsConfigDict(

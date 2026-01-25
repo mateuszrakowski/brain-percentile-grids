@@ -9,7 +9,6 @@ from app.fastapi.config import get_settings
 
 # JWT configuration
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 # Password hasher using Argon2
 password_hash = PasswordHash.recommended()
@@ -60,7 +59,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     data : dict
         The data to encode in the token (typically {"sub": username}).
     expires_delta : timedelta | None, optional
-        Custom expiration time. If None, uses ACCESS_TOKEN_EXPIRE_MINUTES.
+        Custom expiration time. If None, uses access_token_expire_minutes from settings.
 
     Returns
     -------
@@ -73,7 +72,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     if expires_delta:
         expire = datetime.now(UTC) + expires_delta
     else:
-        expire = datetime.now(UTC) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(UTC) + timedelta(minutes=settings.access_token_expire_minutes)
 
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=ALGORITHM)

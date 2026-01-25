@@ -1,4 +1,4 @@
-from collections.abc import Generator
+from collections.abc import Iterator
 
 from sqlmodel import Session, SQLModel, create_engine
 
@@ -14,7 +14,7 @@ def init_db() -> None:
     SQLModel.metadata.create_all(engine)
 
 
-def get_session() -> Generator[Session, None, None]:
+def get_session() -> Iterator[Session]:
     """Dependency for getting DB session in endpoints."""
     with Session(engine) as session:
         yield session
