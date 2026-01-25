@@ -1,6 +1,5 @@
 """Authentication endpoints for user registration and login."""
 
-from datetime import timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -10,7 +9,6 @@ from sqlmodel import Session, select
 from app.fastapi.auth.dependencies import get_current_user
 from app.fastapi.auth.schemas import Token, UserCreate, UserResponse
 from app.fastapi.auth.security import (
-    ACCESS_TOKEN_EXPIRE_MINUTES,
     create_access_token,
     get_password_hash,
     verify_password,
@@ -113,11 +111,7 @@ async def login_for_access_token(
         )
 
     # Create access token
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.username},
-        expires_delta=access_token_expires,
-    )
+    access_token = create_access_token(data={"sub": user.username})
 
     return Token(access_token=access_token, token_type="bearer")
 

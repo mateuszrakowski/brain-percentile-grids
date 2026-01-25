@@ -85,7 +85,7 @@ class ModelSelector:
             data_table=data_table,
             x_column=x_column,
             y_column=y_column,
-            percentiles=percentiles,
+            percentiles=self.percentiles,
         )
 
         # Load default model candidates
