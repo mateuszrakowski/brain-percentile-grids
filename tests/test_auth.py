@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 import jwt
 
+from app.fastapi.auth.schemas import UserCreate
 from app.fastapi.auth.security import create_access_token
 
 ALGORITHM = "HS256"
@@ -35,6 +36,18 @@ class TestCreateAccessToken:
 
         assert int(expiration_time) == decoded_token["exp"]
         assert decoded_token["sub"] == username["sub"]
+
+
+class TestRegisterUser:
+    def test_success(self, client):
+        user = UserCreate(username="username", password="password")
+        response = client.post("/api/auth/register", json=user.model_dump())
+        assert response.status_code == 201
+
+    def test_duplicated(self, client, test_user):
+        user = UserCreate(username="test-username", password="test-password")
+        response = client.post("/api/auth/register", json=user.model_dump())
+        assert response.status_code == 400
 
 
 class TestLogin:
