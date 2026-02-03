@@ -42,6 +42,8 @@ class ReferenceCalculationRequest(BaseModel):
         """Ensure column names are valid."""
         if v is None:
             return v
+        if not v:
+            raise ValueError("Column names cannot be empty")
         for col in v:
             if not col or not col.strip():
                 raise ValueError("Column names cannot be empty")
