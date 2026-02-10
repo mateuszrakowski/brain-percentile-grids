@@ -1,6 +1,7 @@
 import json
 from unittest.mock import Mock
 
+import pandas as pd
 import pytest
 
 from app.fastapi.models.requests import ReferenceCalculationRequest
@@ -12,6 +13,42 @@ from app.fastapi.services.calculation import (
 )
 
 
+@pytest.fixture
+def mock_fit_results():
+    return [
+        CalculationProgress(
+            current=1,
+            total=2,
+            structure="hippo",
+            status="fitting",
+            message="...",
+        ),
+        CalculationProgress(
+            current=2,
+            total=2,
+            structure="hippo",
+            status="fitting",
+            message="...",
+        ),
+        ReferenceCalculationResult(
+            results={
+                "hippo": ModelFitResult(
+                    structure="hippo",
+                    converged=True,
+                    aic=1.0,
+                    bic=1.0,
+                    family="NO",
+                    formula="x1",
+                    percentile_curves={"t": [0.1, 0.2]},
+                    x_values=[1.0, 2.0],
+                ),
+            },
+            successful_count=1,
+            failed_count=0,
+        ),
+    ]
+
+
 async def async_iter(items):
     for item in items:
         yield item
@@ -19,44 +56,11 @@ async def async_iter(items):
 
 class TestGenerateSseEvents:
     @pytest.mark.asyncio
-    async def test_generate_sse_events(self):
+    async def test_generate_sse_events(self, mock_fit_results):
         request = ReferenceCalculationRequest()
         mock_service = Mock()
         mock_service.fit_reference_models = Mock(
-            return_value=async_iter(
-                [
-                    CalculationProgress(
-                        current=1,
-                        total=2,
-                        structure="hippo",
-                        status="fitting",
-                        message="...",
-                    ),
-                    CalculationProgress(
-                        current=2,
-                        total=2,
-                        structure="hippo",
-                        status="fitting",
-                        message="...",
-                    ),
-                    ReferenceCalculationResult(
-                        results={
-                            "structure_1": ModelFitResult(
-                                structure="structure_1",
-                                converged=True,
-                                aic=1.0,
-                                bic=1.0,
-                                family="NO",
-                                formula="x1",
-                                percentile_curves={"t": [0.1, 0.2]},
-                                x_values=[1.0, 2.0],
-                            ),
-                        },
-                        successful_count=1,
-                        failed_count=0,
-                    ),
-                ]
-            )
+            return_value=async_iter(mock_fit_results)
         )
 
         events = [e async for e in generate_sse_events(mock_service, 1, 1, request)]
@@ -80,3 +84,37 @@ class TestGenerateSseEvents:
         ]
         assert final_response["successful_count"] == 1
         assert final_response["failed_count"] == 0
+
+
+class TestFitDatasetModels:
+    def test_fit_dataset_models(
+        self,
+        client,
+        test_dataset,
+        test_user_db,
+        test_user_token,
+        monkeypatch,
+        mock_fit_results,
+    ):
+        monkeypatch.setattr(
+            "app.fastapi.routers.calculations.CalculationService.fit_reference_models",
+            lambda self, **kwargs: async_iter(mock_fit_results),
+        )
+        monkeypatch.setattr(
+            "app.fastapi.routers.calculations.ReferenceDataService.get_reference_dataframe",
+            lambda self, dataset_id: pd.DataFrame(
+                {"AgeYears": [1, 2], "hippo": [0.5, 0.6]}
+            ),
+        )
+
+        response = client.post(
+            f"/api/datasets/{test_dataset['id']}/fit",
+            json={
+                "y_columns": ["hippo"],
+                "percentiles": [0.2, 0.5, 0.7],
+            },
+            headers={"Authorization": f"Bearer {test_user_token}"},
+        )
+
+        assert response.json()["successful_count"] == 1
+        assert response.json()["failed_count"] == 0
