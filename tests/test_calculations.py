@@ -9,6 +9,7 @@ from app.fastapi.routers.calculations import generate_sse_events
 from app.fastapi.services.calculation import (
     CalculationProgress,
     ModelFitResult,
+    PatientPercentileResult,
     ReferenceCalculationResult,
 )
 
@@ -91,7 +92,6 @@ class TestFitDatasetModels:
         self,
         client,
         test_dataset,
-        test_user_db,
         test_user_token,
         monkeypatch,
         mock_fit_results,
@@ -118,3 +118,105 @@ class TestFitDatasetModels:
 
         assert response.json()["successful_count"] == 1
         assert response.json()["failed_count"] == 0
+
+    def test_fit_dataset_models_empty_df(
+        self,
+        client,
+        test_dataset,
+        test_user_token,
+        monkeypatch,
+    ):
+        monkeypatch.setattr(
+            "app.fastapi.routers.calculations.ReferenceDataService.get_reference_dataframe",
+            lambda self, dataset_id: pd.DataFrame(),
+        )
+
+        response = client.post(
+            f"/api/datasets/{test_dataset['id']}/fit",
+            json={
+                "y_columns": ["hippo"],
+                "percentiles": [0.2, 0.5, 0.7],
+            },
+            headers={"Authorization": f"Bearer {test_user_token}"},
+        )
+
+        assert response.status_code == 404
+
+    def test_fit_dataset_models_stream(
+        self,
+        client,
+        test_dataset,
+        test_user_token,
+        monkeypatch,
+        mock_fit_results,
+    ):
+        monkeypatch.setattr(
+            "app.fastapi.routers.calculations.ReferenceDataService.get_reference_dataframe",
+            lambda self, dataset_id: pd.DataFrame(
+                {"AgeYears": [1, 2], "hippo": [0.5, 0.6]}
+            ),
+        )
+        monkeypatch.setattr(
+            "app.fastapi.routers.calculations.CalculationService.fit_reference_models",
+            lambda self, **kwargs: async_iter(mock_fit_results),
+        )
+
+        response = client.post(
+            f"/api/datasets/{test_dataset['id']}/fit/stream",
+            json={
+                "y_columns": ["hippo"],
+                "percentiles": [0.2, 0.5, 0.7],
+            },
+            headers={"Authorization": f"Bearer {test_user_token}"},
+        )
+
+        events = [
+            json.loads(line.removeprefix("data: "))
+            for line in response.text.strip().split("\n\n")
+        ]
+
+        assert events[0]["type"] == "progress"
+        assert events[-1]["type"] == "complete"
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
+
+
+class TestCalculateOOSPercentiles:
+    def test_calculate_oos_percentiles(
+        self, client, test_dataset, test_user_token, monkeypatch
+    ):
+        monkeypatch.setattr(
+            "app.fastapi.routers.calculations.CalculationService.calculate_patient_percentiles",
+            lambda self, **kwargs: [
+                PatientPercentileResult(
+                    patient_id="1",
+                    structure="hippo",
+                    age=25,
+                    value=0.5,
+                    z_score=0.3,
+                    percentile=0.7,
+                )
+            ],
+        )
+        monkeypatch.setattr(
+            "app.fastapi.routers.calculations.PatientDataProcessor.process_files",
+            lambda self, files: [
+                pd.DataFrame({"patient_id": ["p1"], "age": [25], "hippo": [0.5]})
+            ],
+        )
+
+        response = client.post(
+            f"/api/datasets/{test_dataset['id']}/calculate",
+            files=[
+                (
+                    "files",
+                    ("patient1.csv", b"patient_id,age,hippo\np1,25,0.5", "text/csv"),
+                ),
+            ],
+            headers={"Authorization": f"Bearer {test_user_token}"},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["patients_processed"] == 1
+        assert response.json()["structures_processed"] == 1
