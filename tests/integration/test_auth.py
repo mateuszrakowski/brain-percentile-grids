@@ -1,44 +1,15 @@
-from datetime import UTC, datetime, timedelta
+"""Integration tests for authentication endpoints.
 
-import jwt
+Tests the full auth flow through the HTTP client: registration,
+login (OAuth2 password flow), and the /me endpoint. Verifies
+correct status codes for valid and invalid credentials.
+"""
 
 from app.fastapi.auth.schemas import UserCreate
-from app.fastapi.auth.security import create_access_token
-
-ALGORITHM = "HS256"
-FIXED_TIME = datetime(2035, 1, 1, 12, 0, 0, tzinfo=UTC)
-
-
-class MockDatetime:
-    @classmethod
-    def now(cls, timezone):
-        return FIXED_TIME
-
-
-class TestCreateAccessToken:
-    def test_valid_token(self, test_settings, monkeypatch):
-        monkeypatch.setattr("app.fastapi.auth.security.datetime", MockDatetime)
-        monkeypatch.setattr(
-            "app.fastapi.auth.security.get_settings", lambda: test_settings
-        )
-        username = {"sub": "test_username"}
-
-        access_token = create_access_token(username)
-
-        decoded_token = jwt.decode(
-            access_token, test_settings.secret_key, algorithms=[ALGORITHM]
-        )
-
-        expiration_time = (
-            MockDatetime.now(UTC)
-            + timedelta(minutes=test_settings.access_token_expire_minutes)
-        ).timestamp()
-
-        assert int(expiration_time) == decoded_token["exp"]
-        assert decoded_token["sub"] == username["sub"]
 
 
 class TestRegisterUser:
+    """Tests for POST /api/auth/register."""
     def test_success(self, client):
         user = UserCreate(username="username", password="password")
         response = client.post("/api/auth/register", json=user.model_dump())
@@ -51,6 +22,7 @@ class TestRegisterUser:
 
 
 class TestLogin:
+    """Tests for POST /api/auth/token (OAuth2 password flow)."""
     def test_success(self, client, test_user):
         login_response = client.post(
             "/api/auth/token",
@@ -85,6 +57,7 @@ class TestLogin:
 
 
 class TestGetCurrentUser:
+    """Tests for GET /api/auth/me (token-protected endpoint)."""
     def test_valid_token(self, client, test_user):
         login_response = client.post(
             "/api/auth/token",

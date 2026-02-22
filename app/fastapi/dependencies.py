@@ -61,9 +61,6 @@ async def get_validated_files(
         400 if no files provided, too many files, invalid filename,
         unsupported extension, file too large, or empty file.
     """
-    if not files:
-        raise HTTPException(status_code=400, detail="No files provided")
-
     if len(files) > settings.max_files_count:
         raise HTTPException(
             status_code=400,

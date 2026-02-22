@@ -1,9 +1,18 @@
+"""Unit tests for Pydantic request model validation.
+
+Tests custom validators on request models. We only test validators
+that contain our own logic (e.g. percentile range checks, y_columns
+non-empty). We do NOT test built-in Pydantic constraints like
+min_length, as that would be testing Pydantic itself.
+"""
+
 import pytest
 
 from app.fastapi.models.requests import FileUploadMetadata, ReferenceCalculationRequest
 
 
 class TestReferenceCalculation:
+    """Tests for ReferenceCalculationRequest custom validators."""
     def test_valid_percentiles(self):
         req = ReferenceCalculationRequest(
             x_column="test_x",
@@ -33,6 +42,7 @@ class TestReferenceCalculation:
 
 
 class TestFileUploadMetadata:
+    """Tests for FileUploadMetadata content type validation."""
     @pytest.mark.parametrize(
         "content_type",
         [

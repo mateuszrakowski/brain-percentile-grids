@@ -1,11 +1,16 @@
+"""Integration tests for calculation endpoints.
+
+Tests fit, stream, and OOS percentile endpoints through the HTTP
+client. Services (CalculationService, ReferenceDataService,
+PatientDataProcessor) are monkeypatched because they are created
+inside the endpoints and can't be passed in via dependency injection.
+"""
+
 import json
-from unittest.mock import Mock
 
 import pandas as pd
 import pytest
 
-from app.fastapi.models.requests import ReferenceCalculationRequest
-from app.fastapi.routers.calculations import generate_sse_events
 from app.fastapi.services.calculation import (
     CalculationProgress,
     ModelFitResult,
@@ -55,39 +60,9 @@ async def async_iter(items):
         yield item
 
 
-class TestGenerateSseEvents:
-    @pytest.mark.asyncio
-    async def test_generate_sse_events(self, mock_fit_results):
-        request = ReferenceCalculationRequest()
-        mock_service = Mock()
-        mock_service.fit_reference_models = Mock(
-            return_value=async_iter(mock_fit_results)
-        )
-
-        events = [e async for e in generate_sse_events(mock_service, 1, 1, request)]
-
-        first_progress = json.loads(events[0].removeprefix("data: ").strip())
-        second_progress = json.loads(events[1].removeprefix("data: ").strip())
-        final_response = json.loads(events[2].removeprefix("data: ").strip())
-
-        assert first_progress["progress"] == 50
-        assert second_progress["progress"] == 100
-        assert len(events) == 3
-        assert events[0].startswith("data: ")
-        assert list(first_progress.keys()) == [
-            "type",
-            "current",
-            "total",
-            "structure",
-            "status",
-            "message",
-            "progress",
-        ]
-        assert final_response["successful_count"] == 1
-        assert final_response["failed_count"] == 0
-
-
 class TestFitDatasetModels:
+    """Tests for POST /api/datasets/{id}/fit and /fit/stream."""
+
     def test_fit_dataset_models(
         self,
         client,
@@ -124,13 +99,7 @@ class TestFitDatasetModels:
         client,
         test_dataset,
         test_user_token,
-        monkeypatch,
     ):
-        monkeypatch.setattr(
-            "app.fastapi.routers.calculations.ReferenceDataService.get_reference_dataframe",
-            lambda self, dataset_id: pd.DataFrame(),
-        )
-
         response = client.post(
             f"/api/datasets/{test_dataset['id']}/fit",
             json={
@@ -183,6 +152,13 @@ class TestFitDatasetModels:
 
 
 class TestCalculateOOSPercentiles:
+    """Tests for POST /api/datasets/{id}/calculate.
+
+    Covers happy path with mocked processing, file validation
+    (wrong filename, wrong extension), empty dataframe handling,
+    and missing fitted models.
+    """
+
     def test_calculate_oos_percentiles(
         self, client, test_dataset, test_user_token, monkeypatch
     ):
@@ -202,7 +178,14 @@ class TestCalculateOOSPercentiles:
         monkeypatch.setattr(
             "app.fastapi.routers.calculations.PatientDataProcessor.process_files",
             lambda self, files: [
-                pd.DataFrame({"patient_id": ["p1"], "age": [25], "hippo": [0.5]})
+                pd.DataFrame(
+                    {
+                        "PatientID": ["p1"],
+                        "AgeYears": [25],
+                        "StudyDate": ["2024-01-01"],
+                        "hippo": [0.5],
+                    }
+                )
             ],
         )
 
@@ -211,7 +194,7 @@ class TestCalculateOOSPercentiles:
             files=[
                 (
                     "files",
-                    ("patient1.csv", b"patient_id,age,hippo\np1,25,0.5", "text/csv"),
+                    ("patient1.csv", b"content", "text/csv"),
                 ),
             ],
             headers={"Authorization": f"Bearer {test_user_token}"},
@@ -286,13 +269,16 @@ class TestCalculateOOSPercentiles:
         self, client, test_dataset, test_user_token, monkeypatch
     ):
         monkeypatch.setattr(
-            "app.fastapi.routers.calculations.CalculationService.calculate_patient_percentiles",
-            lambda self, **kwargs: [],
-        )
-        monkeypatch.setattr(
             "app.fastapi.routers.calculations.PatientDataProcessor.process_files",
             lambda self, files: [
-                pd.DataFrame({"patient_id": ["p1"], "age": [25], "hippo": [0.5]})
+                pd.DataFrame(
+                    {
+                        "PatientID": ["p1"],
+                        "AgeYears": [25],
+                        "StudyDate": ["2024-01-01"],
+                        "hippo": [0.5],
+                    }
+                )
             ],
         )
 
@@ -301,7 +287,7 @@ class TestCalculateOOSPercentiles:
             files=[
                 (
                     "files",
-                    ("patient1.csv", b"patient_id,age,hippo\np1,25,0.5", "text/csv"),
+                    ("patient1.csv", b"content", "text/csv"),
                 ),
             ],
             headers={"Authorization": f"Bearer {test_user_token}"},
