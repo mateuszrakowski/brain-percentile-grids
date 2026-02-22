@@ -220,3 +220,91 @@ class TestCalculateOOSPercentiles:
         assert response.status_code == 200
         assert response.json()["patients_processed"] == 1
         assert response.json()["structures_processed"] == 1
+
+    def test_calculate_oos_percentiles_wrong_filename(
+        self, client, test_dataset, test_user_token
+    ):
+        response = client.post(
+            f"/api/datasets/{test_dataset['id']}/calculate",
+            files=[
+                (
+                    "files",
+                    ("???.csv", b"patient_id,age,hippo\np1,25,0.5", "text/csv"),
+                ),
+            ],
+            headers={"Authorization": f"Bearer {test_user_token}"},
+        )
+
+        assert response.status_code == 400
+
+    @pytest.mark.parametrize(
+        "extension,content_type",
+        [("txt", "text/plain"), ("xml", "text/xml"), ("mp4", "video/mp4")],
+    )
+    def test_calculate_oos_percentiles_wrong_extension(
+        self, client, test_dataset, test_user_token, extension, content_type
+    ):
+        response = client.post(
+            f"/api/datasets/{test_dataset['id']}/calculate",
+            files=[
+                (
+                    "files",
+                    (
+                        f"patient1.{extension}",
+                        b"patient_id,age,hippo\np1,25,0.5",
+                        content_type,
+                    ),
+                ),
+            ],
+            headers={"Authorization": f"Bearer {test_user_token}"},
+        )
+
+        assert response.status_code == 400
+
+    def test_calculate_oos_percentiles_invalid_dataframe(
+        self, client, test_dataset, test_user_token, monkeypatch
+    ):
+        monkeypatch.setattr(
+            "app.fastapi.routers.calculations.PatientDataProcessor.process_files",
+            lambda self, files: [pd.DataFrame({})],
+        )
+
+        response = client.post(
+            f"/api/datasets/{test_dataset['id']}/calculate",
+            files=[
+                (
+                    "files",
+                    ("patient1.csv", b"patient_id,age,hippo\np1,25,0.5", "text/csv"),
+                ),
+            ],
+            headers={"Authorization": f"Bearer {test_user_token}"},
+        )
+
+        assert response.status_code == 400
+
+    def test_calculate_oos_percentiles_missing_models(
+        self, client, test_dataset, test_user_token, monkeypatch
+    ):
+        monkeypatch.setattr(
+            "app.fastapi.routers.calculations.CalculationService.calculate_patient_percentiles",
+            lambda self, **kwargs: [],
+        )
+        monkeypatch.setattr(
+            "app.fastapi.routers.calculations.PatientDataProcessor.process_files",
+            lambda self, files: [
+                pd.DataFrame({"patient_id": ["p1"], "age": [25], "hippo": [0.5]})
+            ],
+        )
+
+        response = client.post(
+            f"/api/datasets/{test_dataset['id']}/calculate",
+            files=[
+                (
+                    "files",
+                    ("patient1.csv", b"patient_id,age,hippo\np1,25,0.5", "text/csv"),
+                ),
+            ],
+            headers={"Authorization": f"Bearer {test_user_token}"},
+        )
+
+        assert response.status_code == 400
