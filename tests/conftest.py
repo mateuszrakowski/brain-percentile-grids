@@ -3,6 +3,7 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
 from app.fastapi.config import Settings
+from app.fastapi.db.models import ReferenceDataset, User
 
 
 class TestSettings(Settings):
@@ -40,3 +41,16 @@ def test_engine(test_settings):
 def test_session(test_engine):
     with Session(test_engine) as session:
         yield session
+
+
+@pytest.fixture
+def test_dataset_db(test_session):
+    user = User(username="test", hashed_password="hashed")
+    test_session.add(user)
+    test_session.flush()
+
+    dataset = ReferenceDataset(user_id=user.id, name="test_dataset")
+    test_session.add(dataset)
+    test_session.flush()
+
+    return dataset

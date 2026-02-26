@@ -21,16 +21,20 @@ router = APIRouter(
 
 
 @router.get("/health", response_model=HealthResponse)
-async def health_check():
+async def health_check(settings=Depends(get_settings)):
     """
     Basic health check endpoint.
+
+    Parameters
+    ----------
+    settings : Settings
+        Application settings (injected via dependency).
 
     Returns
     -------
     HealthResponse
         Application health status.
     """
-    settings = get_settings()
     return HealthResponse(
         status="healthy", version=settings.app_version, environment=settings.environment
     )
@@ -75,7 +79,7 @@ async def readiness_check() -> dict[str, bool | dict]:
     """
     checks = {
         "database": True,  # Check database connection
-        "r_environment": await check_r_environment(),
+        "r_environment": check_r_environment(),
     }
 
     all_ready = all(checks.values())
@@ -83,7 +87,7 @@ async def readiness_check() -> dict[str, bool | dict]:
     return {"ready": all_ready, "checks": checks}
 
 
-async def check_r_environment() -> bool:
+def check_r_environment() -> bool:
     """
     Check if R environment is available.
 

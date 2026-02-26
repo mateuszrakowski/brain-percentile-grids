@@ -63,7 +63,7 @@ async def async_iter(items):
 class TestFitDatasetModels:
     """Tests for POST /api/datasets/{id}/fit and /fit/stream."""
 
-    def test_fit_dataset_models(
+    def test_fit_success(
         self,
         client,
         test_dataset,
@@ -94,7 +94,7 @@ class TestFitDatasetModels:
         assert response.json()["successful_count"] == 1
         assert response.json()["failed_count"] == 0
 
-    def test_fit_dataset_models_empty_df(
+    def test_fit_empty_dataset(
         self,
         client,
         test_dataset,
@@ -111,7 +111,7 @@ class TestFitDatasetModels:
 
         assert response.status_code == 404
 
-    def test_fit_dataset_models_stream(
+    def test_fit_stream(
         self,
         client,
         test_dataset,
@@ -159,7 +159,7 @@ class TestCalculateOOSPercentiles:
     and missing fitted models.
     """
 
-    def test_calculate_oos_percentiles(
+    def test_calculate_success(
         self, client, test_dataset, test_user_token, monkeypatch
     ):
         monkeypatch.setattr(
@@ -204,7 +204,7 @@ class TestCalculateOOSPercentiles:
         assert response.json()["patients_processed"] == 1
         assert response.json()["structures_processed"] == 1
 
-    def test_calculate_oos_percentiles_wrong_filename(
+    def test_calculate_wrong_filename(
         self, client, test_dataset, test_user_token
     ):
         response = client.post(
@@ -224,7 +224,7 @@ class TestCalculateOOSPercentiles:
         "extension,content_type",
         [("txt", "text/plain"), ("xml", "text/xml"), ("mp4", "video/mp4")],
     )
-    def test_calculate_oos_percentiles_wrong_extension(
+    def test_calculate_wrong_extension(
         self, client, test_dataset, test_user_token, extension, content_type
     ):
         response = client.post(
@@ -244,7 +244,7 @@ class TestCalculateOOSPercentiles:
 
         assert response.status_code == 400
 
-    def test_calculate_oos_percentiles_invalid_dataframe(
+    def test_calculate_invalid_dataframe(
         self, client, test_dataset, test_user_token, monkeypatch
     ):
         monkeypatch.setattr(
@@ -265,7 +265,7 @@ class TestCalculateOOSPercentiles:
 
         assert response.status_code == 400
 
-    def test_calculate_oos_percentiles_missing_models(
+    def test_calculate_missing_models(
         self, client, test_dataset, test_user_token, monkeypatch
     ):
         monkeypatch.setattr(
