@@ -6,11 +6,14 @@ including conflict detection for duplicate names.
 
 import pandas as pd
 
+from app.fastapi.services.reference_data import ReferenceSummary, SampleRecord
+
 
 class TestCreateDataset:
     """Tests for POST /api/datasets."""
 
     def test_duplicate_name(self, client, test_user_token, test_dataset):
+        """Verify creating a dataset with an existing name returns 409."""
         response = client.post(
             "/api/datasets",
             json={"name": "test-dataset"},
@@ -21,6 +24,7 @@ class TestCreateDataset:
         assert response.status_code == 409
 
     def test_empty_name(self, client, test_user_token):
+        """Verify empty name is rejected by Pydantic min_length=1 validation."""
         response = client.post(
             "/api/datasets",
             json={"name": ""},
@@ -34,6 +38,7 @@ class TestListDatasets:
     """Tests for GET /api/datasets."""
 
     def test_empty_list(self, client, test_user_token):
+        """Verify listing with no datasets returns empty list and total 0."""
         response = client.get(
             "/api/datasets",
             headers={"Authorization": f"Bearer {test_user_token}"},
@@ -45,6 +50,7 @@ class TestListDatasets:
         assert data["datasets"] == []
 
     def test_list_datasets(self, client, test_user_token, test_dataset):
+        """Verify created dataset appears in the list with correct fields."""
         response = client.get(
             "/api/datasets",
             headers={"Authorization": f"Bearer {test_user_token}"},
@@ -66,6 +72,7 @@ class TestGetDataset:
     """Tests for GET /api/datasets/{id}."""
 
     def test_get_dataset(self, client, test_user_token, test_dataset):
+        """Verify dataset detail returns correct fields for an empty dataset."""
         response = client.get(
             f"/api/datasets/{test_dataset['id']}",
             headers={"Authorization": f"Bearer {test_user_token}"},
@@ -84,6 +91,7 @@ class TestUpdateDataset:
     """Tests for PATCH /api/datasets/{id}."""
 
     def test_update_name_and_description(self, client, test_user_token, test_dataset):
+        """Verify both name and description can be updated in a single PATCH."""
         response = client.patch(
             f"/api/datasets/{test_dataset['id']}",
             json={"name": "updated-name", "description": "new desc"},
@@ -97,6 +105,7 @@ class TestUpdateDataset:
         assert data["id"] == test_dataset["id"]
 
     def test_rename_to_existing_name(self, client, test_user_token, test_dataset):
+        """Verify renaming to another user's existing dataset name returns 409."""
         second = client.post(
             "/api/datasets",
             json={"name": "second-dataset"},
@@ -123,6 +132,7 @@ class TestUploadData:
     """
 
     def test_upload_success(self, client, test_user_token, test_dataset, monkeypatch):
+        """Verify successful upload inserts records and returns correct message."""
         monkeypatch.setattr(
             "app.fastapi.routers.data.PatientDataProcessor.process_files",
             lambda self, files: [
@@ -162,6 +172,7 @@ class TestUploadData:
     def test_upload_duplicates(
         self, client, test_user_token, test_dataset, monkeypatch
     ):
+        """Verify second upload of same data detects duplicates and adds 0 records."""
         monkeypatch.setattr(
             "app.fastapi.routers.data.PatientDataProcessor.process_files",
             lambda self, files: [
@@ -214,6 +225,7 @@ class TestUploadData:
         )
 
     def test_upload_empty_files(self, client, test_user_token, test_dataset):
+        """Verify empty file list is rejected with 422."""
         response = client.post(
             f"/api/datasets/{test_dataset['id']}/upload",
             files=[],
@@ -227,6 +239,7 @@ class TestGetDatasetData:
     """Tests for GET /api/datasets/{id}/data."""
 
     def test_empty_dataset(self, client, test_user_token, test_dataset):
+        """Verify dataset with no uploaded data returns empty summary."""
         response = client.get(
             f"/api/datasets/{test_dataset['id']}/data",
             headers={"Authorization": f"Bearer {test_user_token}"},
@@ -243,22 +256,23 @@ class TestGetDatasetData:
     def test_populated_dataset(
         self, client, test_user_token, test_dataset, monkeypatch
     ):
-        mock_summary = {
-            "total_records": 3,
-            "structures": ["hippo", "amygdala"],
-            "sample": [
-                {
-                    "patient_id": "p1",
-                    "study_date": "2024-01-01",
-                    "created_at": "2024-06-15T10:30:00",
-                },
-                {
-                    "patient_id": "p2",
-                    "study_date": "2024-02-01",
-                    "created_at": "2024-06-15T11:00:00",
-                },
+        """Verify monkeypatched summary is correctly mapped to GetDataResponse."""
+        mock_summary = ReferenceSummary(
+            total_records=3,
+            structures=["hippo", "amygdala"],
+            sample=[
+                SampleRecord(
+                    patient_id="p1",
+                    study_date="2024-01-01",
+                    created_at="2024-06-15T10:30:00",
+                ),
+                SampleRecord(
+                    patient_id="p2",
+                    study_date="2024-02-01",
+                    created_at="2024-06-15T11:00:00",
+                ),
             ],
-        }
+        )
 
         monkeypatch.setattr(
             "app.fastapi.routers.data.ReferenceDataService.get_reference_summary",
@@ -285,6 +299,7 @@ class TestClearDatasetData:
     """Tests for DELETE /api/datasets/{id}/data."""
 
     def test_clear_empty_dataset(self, client, test_user_token, test_dataset):
+        """Verify clearing an empty dataset returns 0 deleted records."""
         response = client.delete(
             f"/api/datasets/{test_dataset['id']}/data",
             headers={"Authorization": f"Bearer {test_user_token}"},
@@ -303,6 +318,7 @@ class TestGetDatasetStructures:
     def test_returns_structures(
         self, client, test_user_token, test_dataset, monkeypatch
     ):
+        """Verify monkeypatched structures are returned with correct count."""
         monkeypatch.setattr(
             "app.fastapi.routers.data.ReferenceDataService.get_available_structures",
             lambda self, dataset_id: ["hippo", "amygdala", "thalamus"],
@@ -324,6 +340,7 @@ class TestDeleteDataset:
     """Tests for DELETE /api/datasets/{id}."""
 
     def test_delete_dataset(self, client, test_user_token, test_dataset):
+        """Verify deleting an empty dataset returns 0 counts for all deletions."""
         response = client.delete(
             f"/api/datasets/{test_dataset['id']}",
             headers={"Authorization": f"Bearer {test_user_token}"},

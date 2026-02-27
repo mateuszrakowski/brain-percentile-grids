@@ -14,6 +14,7 @@ from app.fastapi.models.requests import FileUploadMetadata, ReferenceCalculation
 class TestReferenceCalculation:
     """Tests for ReferenceCalculationRequest custom validators."""
     def test_valid_percentiles(self):
+        """Verify percentiles within (0, 1) exclusive range are accepted."""
         req = ReferenceCalculationRequest(
             x_column="test_x",
             y_columns=["test_y"],
@@ -24,6 +25,7 @@ class TestReferenceCalculation:
 
     @pytest.mark.parametrize("percentiles", [None, [0.0, 0.5, 1.0], [-1.0, 0.5]])
     def test_invalid_percentiles(self, percentiles):
+        """Verify None, boundary values (0/1), and negatives are rejected."""
         with pytest.raises(ValueError):
             ReferenceCalculationRequest(
                 x_column="test_x",
@@ -33,6 +35,7 @@ class TestReferenceCalculation:
 
     @pytest.mark.parametrize("y_cols", [[""], []])
     def test_invalid_y_columns(self, y_cols):
+        """Verify empty list and blank strings are rejected."""
         with pytest.raises(ValueError):
             ReferenceCalculationRequest(
                 x_column="test_x",
@@ -52,6 +55,7 @@ class TestFileUploadMetadata:
         ],
     )
     def test_valid_content_type(self, content_type):
+        """Verify CSV and Excel MIME types are accepted."""
         req = FileUploadMetadata(
             filename="test-filename", content_type=content_type, size=3000
         )
@@ -63,6 +67,7 @@ class TestFileUploadMetadata:
         ["text/html", "text/javascript", "image/jpeg"],
     )
     def test_invalid_content_type(self, content_type):
+        """Verify non-spreadsheet MIME types are rejected."""
         with pytest.raises(ValueError):
             FileUploadMetadata(
                 filename="wrong-file", content_type=content_type, size=3000

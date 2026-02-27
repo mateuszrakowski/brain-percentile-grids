@@ -71,6 +71,7 @@ class TestFitDatasetModels:
         monkeypatch,
         mock_fit_results,
     ):
+        """Verify non-streaming fit returns successful and failed counts."""
         monkeypatch.setattr(
             "app.fastapi.routers.calculations.CalculationService.fit_reference_models",
             lambda self, **kwargs: async_iter(mock_fit_results),
@@ -100,6 +101,7 @@ class TestFitDatasetModels:
         test_dataset,
         test_user_token,
     ):
+        """Verify fitting with no reference data returns 404."""
         response = client.post(
             f"/api/datasets/{test_dataset['id']}/fit",
             json={
@@ -119,6 +121,7 @@ class TestFitDatasetModels:
         monkeypatch,
         mock_fit_results,
     ):
+        """Verify SSE stream emits progress events followed by a complete event."""
         monkeypatch.setattr(
             "app.fastapi.routers.calculations.ReferenceDataService.get_reference_dataframe",
             lambda self, dataset_id: pd.DataFrame(
@@ -162,6 +165,7 @@ class TestCalculateOOSPercentiles:
     def test_calculate_success(
         self, client, test_dataset, test_user_token, monkeypatch
     ):
+        """Verify OOS percentile calculation returns correct processed counts."""
         monkeypatch.setattr(
             "app.fastapi.routers.calculations.CalculationService.calculate_patient_percentiles",
             lambda self, **kwargs: [
@@ -207,6 +211,7 @@ class TestCalculateOOSPercentiles:
     def test_calculate_wrong_filename(
         self, client, test_dataset, test_user_token
     ):
+        """Verify unsafe filename characters are rejected with 400."""
         response = client.post(
             f"/api/datasets/{test_dataset['id']}/calculate",
             files=[
@@ -227,6 +232,7 @@ class TestCalculateOOSPercentiles:
     def test_calculate_wrong_extension(
         self, client, test_dataset, test_user_token, extension, content_type
     ):
+        """Verify non-CSV/Excel file extensions are rejected with 400."""
         response = client.post(
             f"/api/datasets/{test_dataset['id']}/calculate",
             files=[
@@ -247,6 +253,7 @@ class TestCalculateOOSPercentiles:
     def test_calculate_invalid_dataframe(
         self, client, test_dataset, test_user_token, monkeypatch
     ):
+        """Verify empty DataFrame from processing is rejected with 400."""
         monkeypatch.setattr(
             "app.fastapi.routers.calculations.PatientDataProcessor.process_files",
             lambda self, files: [pd.DataFrame({})],
@@ -268,6 +275,7 @@ class TestCalculateOOSPercentiles:
     def test_calculate_missing_models(
         self, client, test_dataset, test_user_token, monkeypatch
     ):
+        """Verify calculation without fitted models is rejected with 400."""
         monkeypatch.setattr(
             "app.fastapi.routers.calculations.PatientDataProcessor.process_files",
             lambda self, files: [

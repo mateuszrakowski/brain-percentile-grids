@@ -5,6 +5,7 @@ class TestHealthCheck:
     """Tests for GET /api/monitoring/health."""
 
     def test_health_check(self, client):
+        """Verify health endpoint returns test environment settings."""
         response = client.get("/api/monitoring/health")
 
         assert response.status_code == 200
@@ -18,6 +19,7 @@ class TestDetailedStatus:
     """Tests for GET /api/monitoring/status."""
 
     def test_detailed_status(self, client):
+        """Verify status endpoint returns system metrics from psutil."""
         response = client.get("/api/monitoring/status")
 
         assert response.status_code == 200
@@ -35,6 +37,7 @@ class TestReadinessCheck:
     """Tests for GET /api/monitoring/ready."""
 
     def test_ready(self, client, monkeypatch):
+        """Verify all checks pass when R environment is available."""
         monkeypatch.setattr(
             "app.fastapi.routers.health.check_r_environment",
             lambda: True,
@@ -49,6 +52,7 @@ class TestReadinessCheck:
         assert data["checks"]["r_environment"] is True
 
     def test_not_ready(self, client, monkeypatch):
+        """Verify ready=false when R environment is unavailable."""
         monkeypatch.setattr(
             "app.fastapi.routers.health.check_r_environment",
             lambda: False,

@@ -45,6 +45,24 @@ class ProcessingResult:
         }
 
 
+@dataclass
+class SampleRecord:
+    """A sample patient record for preview."""
+
+    patient_id: str
+    study_date: str
+    created_at: str
+
+
+@dataclass
+class ReferenceSummary:
+    """Summary of a dataset's reference data."""
+
+    total_records: int = 0
+    structures: list[str] = field(default_factory=list)
+    sample: list[SampleRecord] = field(default_factory=list)
+
+
 class ReferenceDataService:
     """
     Service for managing reference dataset operations.
@@ -111,7 +129,7 @@ class ReferenceDataService:
         result.total_records = self._count_dataset_records(dataset_id)
         return result
 
-    def get_reference_summary(self, dataset_id: int) -> dict[str, Any] | None:
+    def get_reference_summary(self, dataset_id: int) -> ReferenceSummary:
         """
         Get summary of a dataset's reference data.
 
@@ -122,15 +140,15 @@ class ReferenceDataService:
 
         Returns
         -------
-        dict[str, Any] | None
-            Summary dictionary or None if no data exists.
+        ReferenceSummary
+            Summary with total records, structures, and sample data.
         """
         records = self.session.exec(
             select(PatientRecord).where(PatientRecord.dataset_id == dataset_id)
         ).all()
 
         if not records:
-            return None
+            return ReferenceSummary()
 
         structure_names = self.session.exec(
             select(PatientStructureValue.structure_name)
@@ -139,20 +157,20 @@ class ReferenceDataService:
             .distinct()
         ).all()
 
-        return {
-            "total_records": len(records),
-            "structures": list(structure_names),
-            "sample": [
-                {
-                    "patient_id": r.patient_id,
-                    "study_date": r.study_date,
-                    "created_at": r.created_at.isoformat(),
-                }
+        return ReferenceSummary(
+            total_records=len(records),
+            structures=list(structure_names),
+            sample=[
+                SampleRecord(
+                    patient_id=r.patient_id,
+                    study_date=r.study_date,
+                    created_at=r.created_at.isoformat(),
+                )
                 for r in records[:5]
             ],
-        }
+        )
 
-    def get_reference_dataframe(self, dataset_id: int) -> pd.DataFrame | None:
+    def get_reference_dataframe(self, dataset_id: int) -> pd.DataFrame:
         """
         Retrieve dataset's reference data as a DataFrame.
 
@@ -165,9 +183,9 @@ class ReferenceDataService:
 
         Returns
         -------
-        pd.DataFrame | None
-            DataFrame with patient records and structure values,
-            or None if no data exists.
+        pd.DataFrame
+            DataFrame with patient records and structure values.
+            Empty DataFrame if no data exists.
         """
         # Use eager loading to fetch all structure values in a single query
         records = self.session.exec(
@@ -177,7 +195,7 @@ class ReferenceDataService:
         ).all()
 
         if not records:
-            return None
+            return pd.DataFrame()
 
         # Build DataFrame from records (structure_values already loaded)
         data_rows = []
@@ -195,9 +213,6 @@ class ReferenceDataService:
                 row[sv.structure_name] = sv.value
 
             data_rows.append(row)
-
-        if not data_rows:
-            return None
 
         return pd.DataFrame(data_rows)
 

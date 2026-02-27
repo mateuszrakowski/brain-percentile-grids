@@ -15,6 +15,7 @@ from app.fastapi.dependencies import get_user_dataset
 class TestUserDataset:
     """Tests for get_user_dataset dependency."""
     async def test_get_user_dataset(self, test_session, test_dataset, test_user_db):
+        """Verify dependency returns the dataset when user owns it."""
         user_dataset = await get_user_dataset(
             dataset_id=test_dataset["id"],
             current_user=test_user_db,
@@ -24,6 +25,7 @@ class TestUserDataset:
         assert user_dataset.id == test_dataset["id"]
 
     async def test_not_existing_user_dataset(self, test_session, test_user_db):
+        """Verify dependency raises 404 for non-existent dataset ID."""
         with pytest.raises(HTTPException) as exc_info:
             await get_user_dataset(
                 dataset_id=99,

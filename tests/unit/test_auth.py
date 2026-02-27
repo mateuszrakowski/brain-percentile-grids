@@ -23,6 +23,7 @@ class MockDatetime:
 
 class TestCreateAccessToken:
     def test_valid_token(self, test_settings, monkeypatch):
+        """Verify JWT contains correct subject claim and expiration time."""
         monkeypatch.setattr("app.fastapi.auth.security.datetime", MockDatetime)
         monkeypatch.setattr(
             "app.fastapi.auth.security.get_settings", lambda: test_settings

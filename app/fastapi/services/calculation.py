@@ -163,7 +163,7 @@ class CalculationService:
 
         # Get reference data
         df = self._reference_service.get_reference_dataframe(dataset_id)
-        if df is None:
+        if df.empty:
             raise ValueError(
                 f"No reference data found for dataset {dataset_id}. "
                 "Caller should validate data exists before fitting."
@@ -362,7 +362,7 @@ class CalculationService:
 
         # Get reference data for model loading
         ref_df = self._reference_service.get_reference_dataframe(dataset_id)
-        if ref_df is None:
+        if ref_df.empty:
             logger.error(f"No reference data found for dataset {dataset_id}")
             return results
 

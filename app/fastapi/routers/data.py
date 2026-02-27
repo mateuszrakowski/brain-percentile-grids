@@ -162,27 +162,18 @@ async def get_dataset_data(
     service = ReferenceDataService(session)
     summary = service.get_reference_summary(dataset.id)
 
-    if summary is None:
-        return GetDataResponse(
-            dataset_id=dataset.id,
-            dataset_name=dataset.name,
-            total_records=0,
-            structures=[],
-            sample=[],
-        )
-
     return GetDataResponse(
         dataset_id=dataset.id,
         dataset_name=dataset.name,
-        total_records=summary["total_records"],
-        structures=summary["structures"],
+        total_records=summary.total_records,
+        structures=summary.structures,
         sample=[
             DataSample(
-                patient_id=s["patient_id"],
-                study_date=s["study_date"],
-                created_at=s["created_at"],
+                patient_id=s.patient_id,
+                study_date=s.study_date,
+                created_at=s.created_at,
             )
-            for s in summary["sample"]
+            for s in summary.sample
         ],
     )
 

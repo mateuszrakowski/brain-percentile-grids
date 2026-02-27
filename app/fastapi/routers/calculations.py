@@ -158,7 +158,7 @@ async def fit_dataset_models(
 
     # Check if dataset has reference data
     df = reference_service.get_reference_dataframe(dataset.id)
-    if df is None or df.empty:
+    if df.empty:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No reference data found in dataset '{dataset.name}'. Please upload data first.",
@@ -240,7 +240,7 @@ async def fit_dataset_models_stream(
 
     # Check if dataset has reference data
     df = reference_service.get_reference_dataframe(dataset.id)
-    if df is None or df.empty:
+    if df.empty:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No reference data found in dataset '{dataset.name}'. Please upload data first.",

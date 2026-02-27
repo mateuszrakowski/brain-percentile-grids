@@ -67,6 +67,7 @@ async def async_iter(items):
 class TestGenerateSseEvents:
     @pytest.mark.asyncio
     async def test_generate_sse_events(self, mock_fit_results):
+        """Verify SSE format, progress percentages, and final result structure."""
         request = ReferenceCalculationRequest()
         mock_service = Mock()
         mock_service.fit_reference_models = Mock(

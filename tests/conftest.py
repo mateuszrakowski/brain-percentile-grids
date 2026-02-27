@@ -1,9 +1,11 @@
+import pandas as pd
 import pytest
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
 from app.fastapi.config import Settings
 from app.fastapi.db.models import ReferenceDataset, User
+from app.fastapi.services.reference_data import ReferenceDataService
 
 
 class TestSettings(Settings):
@@ -54,3 +56,24 @@ def test_dataset_db(test_session):
     test_session.flush()
 
     return dataset
+
+
+@pytest.fixture
+def test_reference_dataset(test_dataset_db, test_session):
+    service = ReferenceDataService(test_session)
+    service.save_reference_data(
+        dataset_id=test_dataset_db.id,
+        dataframes=[
+            pd.DataFrame(
+                {
+                    "PatientID": ["p1", "p2"],
+                    "AgeYears": [25, 35],
+                    "StudyDate": ["2024-01-01", "2024-01-02"],
+                    "StudyDescription": ["scan1", "scan2"],
+                    "hippo": [0.5, 0.6],
+                }
+            )
+        ],
+    )
+
+    return test_dataset_db
