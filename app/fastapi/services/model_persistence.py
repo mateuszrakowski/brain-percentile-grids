@@ -19,8 +19,6 @@ from app.core.engine.model import GAMLSS, FittedGAMLSSModel
 from app.fastapi.config import get_settings
 from app.fastapi.db.models import FittedModel
 
-settings = get_settings()
-
 logger = logging.getLogger(__name__)
 
 
@@ -39,7 +37,7 @@ class ModelPersistenceService:
 
     def __init__(self, session: Session):
         self.session = session
-        self.models_dir = Path(settings.models_dir)
+        self.models_dir = Path(get_settings().models_dir)
 
     def _get_model_directory(self, user_id: int, dataset_id: int) -> Path:
         """
