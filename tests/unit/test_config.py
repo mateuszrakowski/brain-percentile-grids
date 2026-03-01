@@ -8,9 +8,7 @@ class TestParseCorsOrigins:
 
     def test_comma_separated_string(self):
         """Verify comma-separated string is split into a list."""
-        settings = Settings(
-            cors_origins="http://a.com, http://b.com, http://c.com"
-        )
+        settings = Settings(cors_origins="http://a.com, http://b.com, http://c.com")
         assert settings.cors_origins == [
             "http://a.com",
             "http://b.com",

@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 import jwt
 
 from app.fastapi.auth.security import ALGORITHM, create_access_token
+
 FIXED_TIME = datetime(2035, 1, 1, 12, 0, 0, tzinfo=UTC)
 
 

@@ -71,7 +71,7 @@ def parse_sse_events(raw_text: str) -> list[dict[str, Any]]:
     for block in raw_text.strip().split("\n\n"):
         for line in block.strip().splitlines():
             if line.startswith("data:"):
-                payload = line[len("data:"):].strip()
+                payload = line[len("data:") :].strip()
                 events.append(json.loads(payload))
     return events
 
@@ -183,9 +183,7 @@ class TestCalculateOOSPercentiles:
     and missing fitted models.
     """
 
-    def test_calculate_success(
-        self, client, test_dataset, test_user_token
-    ):
+    def test_calculate_success(self, client, test_dataset, test_user_token):
         """Verify OOS percentile calculation returns correct processed counts."""
         mock_results = [
             PatientPercentileResult(
@@ -275,9 +273,7 @@ class TestCalculateOOSPercentiles:
 
         assert response.status_code == 400
 
-    def test_calculate_invalid_dataframe(
-        self, client, test_dataset, test_user_token
-    ):
+    def test_calculate_invalid_dataframe(self, client, test_dataset, test_user_token):
         """Verify empty DataFrame from processing is rejected with 400."""
         with patch.object(
             PatientDataProcessor,
@@ -297,9 +293,7 @@ class TestCalculateOOSPercentiles:
 
         assert response.status_code == 400
 
-    def test_calculate_missing_models(
-        self, client, test_dataset, test_user_token
-    ):
+    def test_calculate_missing_models(self, client, test_dataset, test_user_token):
         """Verify calculation without fitted models is rejected with 400."""
         mock_dfs = [
             pd.DataFrame(

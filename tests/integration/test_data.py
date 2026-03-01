@@ -64,9 +64,7 @@ class TestUploadData:
             == "Successfully added 2 records to 'test-dataset'"
         )
 
-    def test_upload_duplicates(
-        self, client, test_user_token, test_dataset
-    ):
+    def test_upload_duplicates(self, client, test_user_token, test_dataset):
         """Verify second upload of same data detects duplicates and adds 0 records."""
         with patch.object(
             PatientDataProcessor,
@@ -138,9 +136,7 @@ class TestGetDatasetData:
         assert data["structures"] == []
         assert data["sample"] == []
 
-    def test_populated_dataset(
-        self, client, test_user_token, test_dataset
-    ):
+    def test_populated_dataset(self, client, test_user_token, test_dataset):
         """Verify patched summary is correctly mapped to GetDataResponse."""
         mock_summary = ReferenceSummary(
             total_records=3,
@@ -200,9 +196,7 @@ class TestClearDatasetData:
 class TestGetDatasetStructures:
     """Tests for GET /api/datasets/{id}/structures."""
 
-    def test_returns_structures(
-        self, client, test_user_token, test_dataset
-    ):
+    def test_returns_structures(self, client, test_user_token, test_dataset):
         """Verify patched structures are returned with correct count."""
         with patch.object(
             ReferenceDataService,
