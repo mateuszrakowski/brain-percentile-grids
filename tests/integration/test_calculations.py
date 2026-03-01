@@ -2,22 +2,26 @@
 
 Tests fit, stream, and OOS percentile endpoints through the HTTP
 client. Services (CalculationService, ReferenceDataService,
-PatientDataProcessor) are monkeypatched because they are created
+PatientDataProcessor) are patched because they are created
 inside the endpoints and can't be passed in via dependency injection.
 """
 
 import json
 from typing import Any
+from unittest.mock import patch
 
 import pandas as pd
 import pytest
 
 from app.fastapi.services.calculation import (
     CalculationProgress,
+    CalculationService,
     ModelFitResult,
     PatientPercentileResult,
     ReferenceCalculationResult,
 )
+from app.fastapi.services.reference_data import ReferenceDataService
+from app.fastapi.utils.file_utils import PatientDataProcessor
 
 
 @pytest.fixture
@@ -56,6 +60,11 @@ def mock_fit_results():
     ]
 
 
+@pytest.fixture
+def mock_reference_df():
+    return pd.DataFrame({"AgeYears": [1, 2], "hippo": [0.5, 0.6]})
+
+
 def parse_sse_events(raw_text: str) -> list[dict[str, Any]]:
     """Parse SSE response text into a list of JSON event payloads."""
     events = []
@@ -80,29 +89,30 @@ class TestFitDatasetModels:
         client,
         test_dataset,
         test_user_token,
-        monkeypatch,
         mock_fit_results,
+        mock_reference_df,
     ):
         """Verify non-streaming fit returns successful and failed counts."""
-        monkeypatch.setattr(
-            "app.fastapi.routers.calculations.CalculationService.fit_reference_models",
-            lambda self, **kwargs: async_iter(mock_fit_results),
-        )
-        monkeypatch.setattr(
-            "app.fastapi.routers.calculations.ReferenceDataService.get_reference_dataframe",
-            lambda self, dataset_id: pd.DataFrame(
-                {"AgeYears": [1, 2], "hippo": [0.5, 0.6]}
+        with (
+            patch.object(
+                CalculationService,
+                "fit_reference_models",
+                return_value=async_iter(mock_fit_results),
             ),
-        )
-
-        response = client.post(
-            f"/api/datasets/{test_dataset['id']}/fit",
-            json={
-                "y_columns": ["hippo"],
-                "percentiles": [0.2, 0.5, 0.7],
-            },
-            headers={"Authorization": f"Bearer {test_user_token}"},
-        )
+            patch.object(
+                ReferenceDataService,
+                "get_reference_dataframe",
+                return_value=mock_reference_df,
+            ),
+        ):
+            response = client.post(
+                f"/api/datasets/{test_dataset['id']}/fit",
+                json={
+                    "y_columns": ["hippo"],
+                    "percentiles": [0.2, 0.5, 0.7],
+                },
+                headers={"Authorization": f"Bearer {test_user_token}"},
+            )
 
         assert response.status_code == 200
         assert response.json()["successful_count"] == 1
@@ -131,29 +141,30 @@ class TestFitDatasetModels:
         client,
         test_dataset,
         test_user_token,
-        monkeypatch,
         mock_fit_results,
+        mock_reference_df,
     ):
         """Verify SSE stream emits progress events followed by a complete event."""
-        monkeypatch.setattr(
-            "app.fastapi.routers.calculations.ReferenceDataService.get_reference_dataframe",
-            lambda self, dataset_id: pd.DataFrame(
-                {"AgeYears": [1, 2], "hippo": [0.5, 0.6]}
+        with (
+            patch.object(
+                ReferenceDataService,
+                "get_reference_dataframe",
+                return_value=mock_reference_df,
             ),
-        )
-        monkeypatch.setattr(
-            "app.fastapi.routers.calculations.CalculationService.fit_reference_models",
-            lambda self, **kwargs: async_iter(mock_fit_results),
-        )
-
-        response = client.post(
-            f"/api/datasets/{test_dataset['id']}/fit/stream",
-            json={
-                "y_columns": ["hippo"],
-                "percentiles": [0.2, 0.5, 0.7],
-            },
-            headers={"Authorization": f"Bearer {test_user_token}"},
-        )
+            patch.object(
+                CalculationService,
+                "fit_reference_models",
+                return_value=async_iter(mock_fit_results),
+            ),
+        ):
+            response = client.post(
+                f"/api/datasets/{test_dataset['id']}/fit/stream",
+                json={
+                    "y_columns": ["hippo"],
+                    "percentiles": [0.2, 0.5, 0.7],
+                },
+                headers={"Authorization": f"Bearer {test_user_token}"},
+            )
 
         events = parse_sse_events(response.text)
 
@@ -173,46 +184,52 @@ class TestCalculateOOSPercentiles:
     """
 
     def test_calculate_success(
-        self, client, test_dataset, test_user_token, monkeypatch
+        self, client, test_dataset, test_user_token
     ):
         """Verify OOS percentile calculation returns correct processed counts."""
-        monkeypatch.setattr(
-            "app.fastapi.routers.calculations.CalculationService.calculate_patient_percentiles",
-            lambda self, **kwargs: [
-                PatientPercentileResult(
-                    patient_id="1",
-                    structure="hippo",
-                    age=25,
-                    value=0.5,
-                    z_score=0.3,
-                    percentile=0.7,
-                )
-            ],
-        )
-        monkeypatch.setattr(
-            "app.fastapi.routers.calculations.PatientDataProcessor.process_files",
-            lambda self, files: [
-                pd.DataFrame(
-                    {
-                        "PatientID": ["p1"],
-                        "AgeYears": [25],
-                        "StudyDate": ["2024-01-01"],
-                        "hippo": [0.5],
-                    }
-                )
-            ],
-        )
+        mock_results = [
+            PatientPercentileResult(
+                patient_id="1",
+                structure="hippo",
+                age=25,
+                value=0.5,
+                z_score=0.3,
+                percentile=0.7,
+            )
+        ]
+        mock_dfs = [
+            pd.DataFrame(
+                {
+                    "PatientID": ["p1"],
+                    "AgeYears": [25],
+                    "StudyDate": ["2024-01-01"],
+                    "hippo": [0.5],
+                }
+            )
+        ]
 
-        response = client.post(
-            f"/api/datasets/{test_dataset['id']}/calculate",
-            files=[
-                (
-                    "files",
-                    ("patient1.csv", b"content", "text/csv"),
-                ),
-            ],
-            headers={"Authorization": f"Bearer {test_user_token}"},
-        )
+        with (
+            patch.object(
+                CalculationService,
+                "calculate_patient_percentiles",
+                return_value=mock_results,
+            ),
+            patch.object(
+                PatientDataProcessor,
+                "process_files",
+                return_value=mock_dfs,
+            ),
+        ):
+            response = client.post(
+                f"/api/datasets/{test_dataset['id']}/calculate",
+                files=[
+                    (
+                        "files",
+                        ("patient1.csv", b"content", "text/csv"),
+                    ),
+                ],
+                headers={"Authorization": f"Bearer {test_user_token}"},
+            )
 
         assert response.status_code == 200
         assert response.json()["patients_processed"] == 1
@@ -259,54 +276,56 @@ class TestCalculateOOSPercentiles:
         assert response.status_code == 400
 
     def test_calculate_invalid_dataframe(
-        self, client, test_dataset, test_user_token, monkeypatch
+        self, client, test_dataset, test_user_token
     ):
         """Verify empty DataFrame from processing is rejected with 400."""
-        monkeypatch.setattr(
-            "app.fastapi.routers.calculations.PatientDataProcessor.process_files",
-            lambda self, files: [pd.DataFrame({})],
-        )
-
-        response = client.post(
-            f"/api/datasets/{test_dataset['id']}/calculate",
-            files=[
-                (
-                    "files",
-                    ("patient1.csv", b"patient_id,age,hippo\np1,25,0.5", "text/csv"),
-                ),
-            ],
-            headers={"Authorization": f"Bearer {test_user_token}"},
-        )
+        with patch.object(
+            PatientDataProcessor,
+            "process_files",
+            return_value=[pd.DataFrame({})],
+        ):
+            response = client.post(
+                f"/api/datasets/{test_dataset['id']}/calculate",
+                files=[
+                    (
+                        "files",
+                        ("patient1.csv", b"content", "text/csv"),
+                    ),
+                ],
+                headers={"Authorization": f"Bearer {test_user_token}"},
+            )
 
         assert response.status_code == 400
 
     def test_calculate_missing_models(
-        self, client, test_dataset, test_user_token, monkeypatch
+        self, client, test_dataset, test_user_token
     ):
         """Verify calculation without fitted models is rejected with 400."""
-        monkeypatch.setattr(
-            "app.fastapi.routers.calculations.PatientDataProcessor.process_files",
-            lambda self, files: [
-                pd.DataFrame(
-                    {
-                        "PatientID": ["p1"],
-                        "AgeYears": [25],
-                        "StudyDate": ["2024-01-01"],
-                        "hippo": [0.5],
-                    }
-                )
-            ],
-        )
+        mock_dfs = [
+            pd.DataFrame(
+                {
+                    "PatientID": ["p1"],
+                    "AgeYears": [25],
+                    "StudyDate": ["2024-01-01"],
+                    "hippo": [0.5],
+                }
+            )
+        ]
 
-        response = client.post(
-            f"/api/datasets/{test_dataset['id']}/calculate",
-            files=[
-                (
-                    "files",
-                    ("patient1.csv", b"content", "text/csv"),
-                ),
-            ],
-            headers={"Authorization": f"Bearer {test_user_token}"},
-        )
+        with patch.object(
+            PatientDataProcessor,
+            "process_files",
+            return_value=mock_dfs,
+        ):
+            response = client.post(
+                f"/api/datasets/{test_dataset['id']}/calculate",
+                files=[
+                    (
+                        "files",
+                        ("patient1.csv", b"content", "text/csv"),
+                    ),
+                ],
+                headers={"Authorization": f"Bearer {test_user_token}"},
+            )
 
         assert response.status_code == 400

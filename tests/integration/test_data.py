@@ -4,50 +4,59 @@ Tests data upload, retrieval, clearing, and structure listing
 through the HTTP client (routers/data.py).
 """
 
+from unittest.mock import patch
+
 import pandas as pd
 
-from app.fastapi.services.reference_data import ReferenceSummary, SampleRecord
+from app.fastapi.services.reference_data import (
+    ReferenceDataService,
+    ReferenceSummary,
+    SampleRecord,
+)
+from app.fastapi.utils.file_utils import PatientDataProcessor
+
+MOCK_PATIENT_DFS = [
+    pd.DataFrame(
+        {
+            "PatientID": ["p1", "p2"],
+            "AgeYears": [25, 35],
+            "StudyDate": ["2024-01-01", "2024-01-02"],
+            "StudyDescription": ["scan1", "scan2"],
+            "hippo": [0.5, 0.6],
+        }
+    )
+]
 
 
 class TestUploadData:
     """Tests for POST /api/datasets/{id}/upload.
 
-    process_files is monkeypatched because real CSV parsing expects
+    process_files is patched because real CSV parsing expects
     domain-specific column formats. The real save_reference_data runs
     against the test DB, including duplicate detection.
     """
 
-    def test_upload_success(self, client, test_user_token, test_dataset, monkeypatch):
+    def test_upload_success(self, client, test_user_token, test_dataset):
         """Verify successful upload inserts records and returns correct message."""
-        monkeypatch.setattr(
-            "app.fastapi.routers.data.PatientDataProcessor.process_files",
-            lambda self, files: [
-                pd.DataFrame(
-                    {
-                        "PatientID": ["p1", "p2"],
-                        "AgeYears": [25, 35],
-                        "StudyDate": ["2024-01-01", "2024-01-02"],
-                        "StudyDescription": ["scan1", "scan2"],
-                        "hippo": [0.5, 0.6],
-                    }
-                )
-            ],
-        )
-
-        response = client.post(
-            f"/api/datasets/{test_dataset['id']}/upload",
-            files=[
-                (
-                    "files",
-                    ("patient1.csv", b"content", "text/csv"),
-                ),
-                (
-                    "files",
-                    ("patient2.csv", b"content", "text/csv"),
-                ),
-            ],
-            headers={"Authorization": f"Bearer {test_user_token}"},
-        )
+        with patch.object(
+            PatientDataProcessor,
+            "process_files",
+            return_value=MOCK_PATIENT_DFS,
+        ):
+            response = client.post(
+                f"/api/datasets/{test_dataset['id']}/upload",
+                files=[
+                    (
+                        "files",
+                        ("patient1.csv", b"content", "text/csv"),
+                    ),
+                    (
+                        "files",
+                        ("patient2.csv", b"content", "text/csv"),
+                    ),
+                ],
+                headers={"Authorization": f"Bearer {test_user_token}"},
+            )
 
         assert response.status_code == 200
         assert (
@@ -56,53 +65,43 @@ class TestUploadData:
         )
 
     def test_upload_duplicates(
-        self, client, test_user_token, test_dataset, monkeypatch
+        self, client, test_user_token, test_dataset
     ):
         """Verify second upload of same data detects duplicates and adds 0 records."""
-        monkeypatch.setattr(
-            "app.fastapi.routers.data.PatientDataProcessor.process_files",
-            lambda self, files: [
-                pd.DataFrame(
-                    {
-                        "PatientID": ["p1", "p2"],
-                        "AgeYears": [25, 35],
-                        "StudyDate": ["2024-01-01", "2024-01-02"],
-                        "StudyDescription": ["scan1", "scan2"],
-                        "hippo": [0.5, 0.6],
-                    }
-                )
-            ],
-        )
+        with patch.object(
+            PatientDataProcessor,
+            "process_files",
+            return_value=MOCK_PATIENT_DFS,
+        ):
+            _ = client.post(
+                f"/api/datasets/{test_dataset['id']}/upload",
+                files=[
+                    (
+                        "files",
+                        ("patient1.csv", b"content", "text/csv"),
+                    ),
+                    (
+                        "files",
+                        ("patient2.csv", b"content", "text/csv"),
+                    ),
+                ],
+                headers={"Authorization": f"Bearer {test_user_token}"},
+            )
 
-        _ = client.post(
-            f"/api/datasets/{test_dataset['id']}/upload",
-            files=[
-                (
-                    "files",
-                    ("patient1.csv", b"content", "text/csv"),
-                ),
-                (
-                    "files",
-                    ("patient2.csv", b"content", "text/csv"),
-                ),
-            ],
-            headers={"Authorization": f"Bearer {test_user_token}"},
-        )
-
-        response_second = client.post(
-            f"/api/datasets/{test_dataset['id']}/upload",
-            files=[
-                (
-                    "files",
-                    ("patient1.csv", b"content", "text/csv"),
-                ),
-                (
-                    "files",
-                    ("patient2.csv", b"content", "text/csv"),
-                ),
-            ],
-            headers={"Authorization": f"Bearer {test_user_token}"},
-        )
+            response_second = client.post(
+                f"/api/datasets/{test_dataset['id']}/upload",
+                files=[
+                    (
+                        "files",
+                        ("patient1.csv", b"content", "text/csv"),
+                    ),
+                    (
+                        "files",
+                        ("patient2.csv", b"content", "text/csv"),
+                    ),
+                ],
+                headers={"Authorization": f"Bearer {test_user_token}"},
+            )
 
         assert response_second.status_code == 200
         assert (
@@ -140,9 +139,9 @@ class TestGetDatasetData:
         assert data["sample"] == []
 
     def test_populated_dataset(
-        self, client, test_user_token, test_dataset, monkeypatch
+        self, client, test_user_token, test_dataset
     ):
-        """Verify monkeypatched summary is correctly mapped to GetDataResponse."""
+        """Verify patched summary is correctly mapped to GetDataResponse."""
         mock_summary = ReferenceSummary(
             total_records=3,
             structures=["hippo", "amygdala"],
@@ -160,15 +159,15 @@ class TestGetDatasetData:
             ],
         )
 
-        monkeypatch.setattr(
-            "app.fastapi.routers.data.ReferenceDataService.get_reference_summary",
-            lambda self, dataset_id: mock_summary,
-        )
-
-        response = client.get(
-            f"/api/datasets/{test_dataset['id']}/data",
-            headers={"Authorization": f"Bearer {test_user_token}"},
-        )
+        with patch.object(
+            ReferenceDataService,
+            "get_reference_summary",
+            return_value=mock_summary,
+        ):
+            response = client.get(
+                f"/api/datasets/{test_dataset['id']}/data",
+                headers={"Authorization": f"Bearer {test_user_token}"},
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -202,18 +201,18 @@ class TestGetDatasetStructures:
     """Tests for GET /api/datasets/{id}/structures."""
 
     def test_returns_structures(
-        self, client, test_user_token, test_dataset, monkeypatch
+        self, client, test_user_token, test_dataset
     ):
-        """Verify monkeypatched structures are returned with correct count."""
-        monkeypatch.setattr(
-            "app.fastapi.routers.data.ReferenceDataService.get_available_structures",
-            lambda self, dataset_id: ["hippo", "amygdala", "thalamus"],
-        )
-
-        response = client.get(
-            f"/api/datasets/{test_dataset['id']}/structures",
-            headers={"Authorization": f"Bearer {test_user_token}"},
-        )
+        """Verify patched structures are returned with correct count."""
+        with patch.object(
+            ReferenceDataService,
+            "get_available_structures",
+            return_value=["hippo", "amygdala", "thalamus"],
+        ):
+            response = client.get(
+                f"/api/datasets/{test_dataset['id']}/structures",
+                headers={"Authorization": f"Bearer {test_user_token}"},
+            )
 
         assert response.status_code == 200
         data = response.json()
