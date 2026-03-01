@@ -208,9 +208,7 @@ class TestCalculateOOSPercentiles:
         assert response.json()["patients_processed"] == 1
         assert response.json()["structures_processed"] == 1
 
-    def test_calculate_wrong_filename(
-        self, client, test_dataset, test_user_token
-    ):
+    def test_calculate_wrong_filename(self, client, test_dataset, test_user_token):
         """Verify unsafe filename characters are rejected with 400."""
         response = client.post(
             f"/api/datasets/{test_dataset['id']}/calculate",

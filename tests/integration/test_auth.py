@@ -10,6 +10,7 @@ from app.fastapi.auth.schemas import UserCreate
 
 class TestRegisterUser:
     """Tests for POST /api/auth/register."""
+
     def test_success(self, client):
         """Verify new user registration returns 201."""
         user = UserCreate(username="username", password="password")
@@ -25,6 +26,7 @@ class TestRegisterUser:
 
 class TestLogin:
     """Tests for POST /api/auth/token (OAuth2 password flow)."""
+
     def test_success(self, client, test_user):
         """Verify valid credentials return an access token."""
         login_response = client.post(
@@ -64,6 +66,7 @@ class TestLogin:
 
 class TestGetCurrentUser:
     """Tests for GET /api/auth/me (token-protected endpoint)."""
+
     def test_valid_token(self, client, test_user):
         """Verify valid JWT returns the authenticated user's data."""
         login_response = client.post(

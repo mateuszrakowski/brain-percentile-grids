@@ -13,6 +13,7 @@ from app.fastapi.models.requests import FileUploadMetadata, ReferenceCalculation
 
 class TestReferenceCalculation:
     """Tests for ReferenceCalculationRequest custom validators."""
+
     def test_valid_percentiles(self):
         """Verify percentiles within (0, 1) exclusive range are accepted."""
         req = ReferenceCalculationRequest(
@@ -46,6 +47,7 @@ class TestReferenceCalculation:
 
 class TestFileUploadMetadata:
     """Tests for FileUploadMetadata content type validation."""
+
     @pytest.mark.parametrize(
         "content_type",
         [
