@@ -7,6 +7,7 @@ inside the endpoints and can't be passed in via dependency injection.
 """
 
 import json
+from typing import Any
 
 import pandas as pd
 import pytest
@@ -55,6 +56,17 @@ def mock_fit_results():
     ]
 
 
+def parse_sse_events(raw_text: str) -> list[dict[str, Any]]:
+    """Parse SSE response text into a list of JSON event payloads."""
+    events = []
+    for block in raw_text.strip().split("\n\n"):
+        for line in block.strip().splitlines():
+            if line.startswith("data:"):
+                payload = line[len("data:"):].strip()
+                events.append(json.loads(payload))
+    return events
+
+
 async def async_iter(items):
     for item in items:
         yield item
@@ -92,6 +104,7 @@ class TestFitDatasetModels:
             headers={"Authorization": f"Bearer {test_user_token}"},
         )
 
+        assert response.status_code == 200
         assert response.json()["successful_count"] == 1
         assert response.json()["failed_count"] == 0
 
@@ -142,10 +155,7 @@ class TestFitDatasetModels:
             headers={"Authorization": f"Bearer {test_user_token}"},
         )
 
-        events = [
-            json.loads(line.removeprefix("data: "))
-            for line in response.text.strip().split("\n\n")
-        ]
+        events = parse_sse_events(response.text)
 
         assert events[0]["type"] == "progress"
         assert events[-1]["type"] == "complete"

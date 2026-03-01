@@ -21,7 +21,11 @@ def client(test_settings, test_session):
 def test_user(client):
     user = UserCreate(username="test-username", password="test-password")
     response = client.post("/api/auth/register", json=user.model_dump())
-    assert response.status_code == 201
+    if response.status_code != 201:
+        raise RuntimeError(
+            f"Fixture setup failed: registration returned {response.status_code}: "
+            f"{response.text}"
+        )
 
     return user
 
@@ -49,8 +53,10 @@ def test_dataset(client, test_user_token):
         json={"name": "test-dataset"},
         headers={"Authorization": f"Bearer {test_user_token}"},
     )
-
-    assert response.json()["name"] == "test-dataset"
-    assert response.status_code == 200
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"Fixture setup failed: dataset creation returned "
+            f"{response.status_code}: {response.text}"
+        )
 
     return response.json()

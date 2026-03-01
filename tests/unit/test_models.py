@@ -24,9 +24,18 @@ class TestReferenceCalculation:
 
         assert req.percentiles == [0.25, 0.50, 0.75, 0.90]
 
-    @pytest.mark.parametrize("percentiles", [None, [0.0, 0.5, 1.0], [-1.0, 0.5]])
+    def test_none_percentiles_rejected(self):
+        """Verify None is rejected by Pydantic type validation."""
+        with pytest.raises(ValueError):
+            ReferenceCalculationRequest(
+                x_column="test_x",
+                y_columns=["test_y"],
+                percentiles=None,
+            )
+
+    @pytest.mark.parametrize("percentiles", [[0.0, 0.5, 1.0], [-1.0, 0.5]])
     def test_invalid_percentiles(self, percentiles):
-        """Verify None, boundary values (0/1), and negatives are rejected."""
+        """Verify boundary values (0/1) and negatives are rejected."""
         with pytest.raises(ValueError):
             ReferenceCalculationRequest(
                 x_column="test_x",

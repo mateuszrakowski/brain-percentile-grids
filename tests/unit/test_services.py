@@ -154,8 +154,8 @@ class TestModelPersistenceService:
     def persistence_service(self, test_session, tmp_path, monkeypatch):
         """Create a ModelPersistenceService with settings pointing to tmp_path."""
         monkeypatch.setattr(
-            "app.fastapi.services.model_persistence.settings",
-            Mock(models_dir=str(tmp_path)),
+            "app.fastapi.services.model_persistence.get_settings",
+            lambda: Mock(models_dir=str(tmp_path)),
         )
         return ModelPersistenceService(session=test_session)
 
@@ -185,7 +185,6 @@ class TestModelPersistenceService:
         self, persistence_service, test_session, test_dataset_db, tmp_path, monkeypatch
     ):
         """Verify load_model queries the DB record and delegates to GAMLSS.load_model."""
-        from app.fastapi.db.models import FittedModel
 
         # Create a dummy file on disk
         model_file = tmp_path / "hippo.rds"
@@ -223,7 +222,6 @@ class TestModelPersistenceService:
         self, persistence_service, test_session, test_dataset_db, tmp_path
     ):
         """Verify load_model returns None when DB record exists but file is missing."""
-        from app.fastapi.db.models import FittedModel
 
         db_model = FittedModel(
             dataset_id=test_dataset_db.id,
@@ -262,7 +260,6 @@ class TestModelPersistenceService:
         self, persistence_service, test_session, test_dataset_db
     ):
         """Verify get_dataset_models returns inserted model records."""
-        from app.fastapi.db.models import FittedModel
 
         test_session.add(
             FittedModel(
@@ -301,7 +298,6 @@ class TestModelPersistenceService:
         self, persistence_service, test_session, test_dataset_db
     ):
         """Verify has_fitted_models returns True when models exist."""
-        from app.fastapi.db.models import FittedModel
 
         test_session.add(
             FittedModel(
@@ -325,7 +321,6 @@ class TestModelPersistenceService:
         self, persistence_service, test_session, test_dataset_db, tmp_path
     ):
         """Verify delete_dataset_models removes DB records and model files from disk."""
-        from app.fastapi.db.models import FittedModel
 
         # Create model directory and dummy file
         model_dir = (
