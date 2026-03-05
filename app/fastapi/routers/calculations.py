@@ -349,6 +349,7 @@ async def calculate_oos_percentiles(
             value=r.value,
             reference_mean=None,
             reference_sd=None,
+            is_extrapolated=r.is_extrapolated,
         )
         for r in calc_results
     ]

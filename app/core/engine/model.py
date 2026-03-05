@@ -259,6 +259,24 @@ class FittedGAMLSSModel:
 
         return fig  # type: ignore
 
+    def is_extrapolated(self, patient_age: float) -> bool:
+        """
+        Check if patient age falls outside the training data range.
+
+        Parameters
+        ----------
+        patient_age : float
+            The patient's age value.
+
+        Returns
+        -------
+        bool
+            True if patient_age is outside the training data range.
+        """
+        x_min = self.data_table[self.x_column].min()
+        x_max = self.data_table[self.x_column].max()
+        return patient_age < x_min or patient_age > x_max
+
     def predict_patient_oos(self, patient_data: pd.DataFrame) -> tuple[float, float]:
         """
         Predict out-of-sample z-score and percentile for a patient.
@@ -372,7 +390,7 @@ class FittedGAMLSSModel:
             ),
         )
 
-        if oos_percentile:
+        if oos_percentile is not None and not np.isnan(oos_percentile):
             ax.annotate(
                 f" P {oos_percentile * 100:.1f}\n (Z={oos_zscore:.2f})",
                 (

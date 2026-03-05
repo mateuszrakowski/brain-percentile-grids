@@ -34,7 +34,7 @@ class TestReferenceDataService:
                 pd.DataFrame(
                     {
                         "PatientID": ["p1", "p2"],
-                        "AgeYears": [25, 35],
+                        "PatientAge": [25.0, 35.0],
                         "StudyDate": ["2024-01-01", "2024-01-02"],
                         "StudyDescription": ["scan1", "scan2"],
                         "hippo": [0.5, 0.6],
@@ -58,7 +58,7 @@ class TestReferenceDataService:
                 pd.DataFrame(
                     {
                         "PatientID": ["p1", "p2"],
-                        "AgeYears": [25, 35],
+                        "PatientAge": [25.0, 35.0],
                         "StudyDate": ["2024-01-01", "2024-01-02"],
                         "StudyDescription": ["scan1", "scan2"],
                         "hippo": [0.5, 0.6],
@@ -92,7 +92,7 @@ class TestReferenceDataService:
         assert isinstance(df, pd.DataFrame)
         assert len(df) == 2
         assert "PatientID" in df.columns
-        assert "AgeYears" in df.columns
+        assert "PatientAge" in df.columns
         assert "hippo" in df.columns
         assert list(df["PatientID"]) == ["p1", "p2"]
         assert list(df["hippo"]) == [0.5, 0.6]
@@ -181,6 +181,39 @@ class TestModelPersistenceService:
         assert "hippo.rds" in result.file_path
         mock_fitted_model.save.assert_called_once()
 
+    def test_save_model_updates_existing(self, persistence_service, test_dataset_db):
+        """Verify save_model updates an existing record instead of creating a duplicate."""
+        mock_first = Mock()
+        mock_first.aic = 100.0
+        mock_first.bic = 110.0
+        mock_first.model.rx2.return_value = ["NO"]
+
+        persistence_service.save_model(
+            fitted_model=mock_first,
+            user_id=test_dataset_db.user_id,
+            dataset_id=test_dataset_db.id,
+            structure="hippo",
+        )
+
+        mock_second = Mock()
+        mock_second.aic = 90.0
+        mock_second.bic = 95.0
+        mock_second.model.rx2.return_value = ["BCT"]
+
+        result = persistence_service.save_model(
+            fitted_model=mock_second,
+            user_id=test_dataset_db.user_id,
+            dataset_id=test_dataset_db.id,
+            structure="hippo",
+        )
+
+        assert result.aic == 90.0
+        assert result.bic == 95.0
+        assert result.family == "BCT"
+
+        models = persistence_service.get_dataset_models(test_dataset_db.id)
+        assert len(models) == 1
+
     def test_load_model(
         self, persistence_service, test_session, test_dataset_db, tmp_path, monkeypatch
     ):
@@ -212,7 +245,7 @@ class TestModelPersistenceService:
             dataset_id=test_dataset_db.id,
             structure="hippo",
             source_data=pd.DataFrame(),
-            x_column="AgeYears",
+            x_column="PatientAge",
             percentiles=[0.5],
         )
 
@@ -238,7 +271,7 @@ class TestModelPersistenceService:
             dataset_id=test_dataset_db.id,
             structure="hippo",
             source_data=pd.DataFrame(),
-            x_column="AgeYears",
+            x_column="PatientAge",
             percentiles=[0.5],
         )
 
@@ -250,7 +283,7 @@ class TestModelPersistenceService:
             dataset_id=test_dataset_db.id,
             structure="nonexistent",
             source_data=pd.DataFrame(),
-            x_column="AgeYears",
+            x_column="PatientAge",
             percentiles=[0.5],
         )
 
@@ -510,7 +543,7 @@ class TestCalculationService:
             pd.DataFrame(
                 {
                     "PatientID": ["p1"],
-                    "AgeYears": [25],
+                    "PatientAge": [25.0],
                     "StudyDate": ["2024-01-01"],
                     "StudyDescription": ["scan1"],
                     "hippo": [0.5],
@@ -552,7 +585,7 @@ class TestCalculationService:
 
         result = service.calculate_patient_percentiles(
             test_reference_dataset.id,
-            pd.DataFrame({"PatientID": ["p1"], "AgeYears": [25], "hippo": [0.5]}),
+            pd.DataFrame({"PatientID": ["p1"], "PatientAge": [25.0], "hippo": [0.5]}),
         )
 
         assert result == []
@@ -579,11 +612,45 @@ class TestCalculationService:
 
         result = service.calculate_patient_percentiles(
             test_reference_dataset.id,
-            pd.DataFrame({"PatientID": ["p1"], "AgeYears": [25], "hippo": [0.5]}),
+            pd.DataFrame({"PatientID": ["p1"], "PatientAge": [25.0], "hippo": [0.5]}),
             ["hippo"],
         )
 
         assert len(result) == 1
         assert result[0].error == "Model not loaded"
+        assert result[0].z_score is None
+        assert result[0].percentile is None
+
+    def test_calculate_patient_percentiles_prediction_exception(
+        self, test_reference_dataset, monkeypatch, test_session
+    ):
+        """Verify exception during prediction is caught and recorded as error."""
+        persistence_mock = Mock()
+        persistence_mock.get_dataset_models.return_value = [
+            FittedModel(
+                dataset_id=test_reference_dataset.id,
+                structure="hippo",
+                family="NO",
+                aic=100.0,
+                bic=110.0,
+                file_path="",
+            )
+        ]
+
+        model_mock = Mock()
+        model_mock.predict_patient_oos.side_effect = RuntimeError("R prediction failed")
+        persistence_mock.load_model.return_value = model_mock
+
+        service = CalculationService(test_session)
+        monkeypatch.setattr(service, "_persistence_service", persistence_mock)
+
+        result = service.calculate_patient_percentiles(
+            test_reference_dataset.id,
+            pd.DataFrame({"PatientID": ["p1"], "PatientAge": [25.0], "hippo": [0.5]}),
+            ["hippo"],
+        )
+
+        assert len(result) == 1
+        assert result[0].error == "R prediction failed"
         assert result[0].z_score is None
         assert result[0].percentile is None

@@ -58,9 +58,9 @@ def _parse_input_file(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     return head, body
 
 
-def _calculate_age(birth_date: datetime, study_date: datetime) -> tuple[int, int]:
+def _calculate_age(birth_date: datetime, study_date: datetime) -> float:
     """
-    Calculate age in years and months from birth and study dates.
+    Calculate age as a continuous float from birth and study dates.
 
     Parameters
     ----------
@@ -71,8 +71,8 @@ def _calculate_age(birth_date: datetime, study_date: datetime) -> tuple[int, int
 
     Returns
     -------
-    tuple[int, int]
-        A tuple containing age in years and age in months.
+    float
+        Age in years as a continuous value (e.g., 5.25 for 5 years 3 months).
     """
     age_years = (
         study_date.year
@@ -85,7 +85,7 @@ def _calculate_age(birth_date: datetime, study_date: datetime) -> tuple[int, int
         age_months -= 1
     age_months %= 12
 
-    return age_years, age_months
+    return age_years + age_months / 12
 
 
 def process_csv_input(df: pd.DataFrame) -> pd.DataFrame:
@@ -150,13 +150,12 @@ def process_csv_input(df: pd.DataFrame) -> pd.DataFrame:
                 f"error: {str(e)}"
             ) from e
 
-    head["AgeYears"], head["AgeMonths"] = _calculate_age(birth_date, study_date)
+    head["PatientAge"] = _calculate_age(birth_date, study_date)
 
     head = head[
         [
             "PatientID",
-            "AgeYears",
-            "AgeMonths",
+            "PatientAge",
             "BirthDate",
             "StudyDate",
             "StudyDescription",
@@ -195,7 +194,7 @@ def sum_structure_volumes(structures_df: pd.DataFrame) -> pd.DataFrame:
         CerebrospinalFluidTotal,
         TotalStructuresVolume,
     ]
-    summary_table = structures_df.iloc[:, :6].copy()
+    summary_table = structures_df.iloc[:, :5].copy()
 
     for structure_class in structure_classes:
         volume_cols = list(structure_class().model_dump().values())
@@ -208,12 +207,11 @@ def sum_structure_volumes(structures_df: pd.DataFrame) -> pd.DataFrame:
             numeric_data = structures_df[volume_cols].copy()
             for col in volume_cols:
                 if col in numeric_data.columns:
-                    # Convert to numeric, coercing errors to NaN, then fill NaN with 0
                     numeric_data[col] = pd.to_numeric(
                         numeric_data[col], errors="coerce"
-                    ).fillna(0)
+                    )
 
-        summed_volumes = numeric_data.sum(axis=1)
+        summed_volumes = numeric_data.sum(axis=1, min_count=1)
         summary_table[structure_class.__name__] = summed_volumes.round(2)
 
     return summary_table

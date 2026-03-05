@@ -56,8 +56,7 @@ class PatientRecord(SQLModel, table=True):
     birth_date: str
     study_date: str
     study_description: str | None = None
-    age_years: int | None = None
-    age_months: int | None = None
+    patient_age: float | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     __table_args__ = (

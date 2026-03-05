@@ -81,7 +81,7 @@ class TestValidatedFileBuffer:
         upload = Mock()
         upload.filename = "test.csv"
         upload.content_type = "text/csv"
-        content = b"PatientID,AgeYears\np1,25"
+        content = b"PatientID,PatientAge\np1,25"
         vf = ValidatedFile(upload, content)
 
         assert vf.read() == content
@@ -170,7 +170,7 @@ class TestReadAndProcessFile:
         processed_df = pd.DataFrame(
             {
                 "PatientID": ["p1"],
-                "AgeYears": [25],
+                "PatientAge": [25],
                 "hippo": [0.5],
             }
         )
@@ -252,7 +252,7 @@ class TestReorderColumns:
                 "zeta_structure": [1],
                 "PatientID": ["p1"],
                 "alpha_structure": [2],
-                "AgeYears": [25],
+                "PatientAge": [25],
             }
         )
 
@@ -261,7 +261,7 @@ class TestReorderColumns:
 
         assert columns == [
             "PatientID",
-            "AgeYears",
+            "PatientAge",
             "alpha_structure",
             "zeta_structure",
         ]
@@ -288,7 +288,7 @@ class TestGetStructureColumns:
         df = pd.DataFrame(
             {
                 "PatientID": ["p1"],
-                "AgeYears": [25],
+                "PatientAge": [25],
                 "StudyDate": ["2024-01-01"],
                 "hippo": [0.5],
                 "amygdala": [0.3],
@@ -303,7 +303,7 @@ class TestGetStructureColumns:
         df = pd.DataFrame(
             {
                 "PatientID": ["p1"],
-                "AgeYears": [25],
+                "PatientAge": [25],
             }
         )
 

@@ -73,8 +73,7 @@ class PatientDataProcessor:
     METADATA_COLUMNS = [
         "Filename",
         "PatientID",
-        "AgeYears",
-        "AgeMonths",
+        "PatientAge",
         "BirthDate",
         "StudyDate",
         "StudyDescription",

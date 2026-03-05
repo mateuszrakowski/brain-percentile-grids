@@ -43,6 +43,11 @@ def test_user_token(client, test_user):
         "/api/auth/token",
         data={"username": test_user.username, "password": test_user.password},
     )
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"Fixture setup failed: login returned {response.status_code}: "
+            f"{response.text}"
+        )
     return response.json()["access_token"]
 
 

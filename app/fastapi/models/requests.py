@@ -10,7 +10,7 @@ class ReferenceCalculationRequest(BaseModel):
     """Request model for reference percentile calculations."""
 
     x_column: str = Field(
-        default="AgeYears", description="Independent variable column name"
+        default="PatientAge", description="Independent variable column name"
     )
 
     y_columns: list[str] | None = Field(
@@ -52,7 +52,7 @@ class ReferenceCalculationRequest(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "x_column": "AgeYears",
+                "x_column": "PatientAge",
                 "y_columns": ["TotalGreyVol", "TotalWhiteVol", "CSF"],
                 "percentiles": [0.05, 0.25, 0.50, 0.75, 0.95],
             }

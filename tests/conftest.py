@@ -67,7 +67,7 @@ def test_reference_dataset(test_dataset_db, test_session):
             pd.DataFrame(
                 {
                     "PatientID": ["p1", "p2"],
-                    "AgeYears": [25, 35],
+                    "PatientAge": [25.0, 35.0],
                     "StudyDate": ["2024-01-01", "2024-01-02"],
                     "StudyDescription": ["scan1", "scan2"],
                     "hippo": [0.5, 0.6],

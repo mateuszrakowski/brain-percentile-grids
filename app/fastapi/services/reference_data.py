@@ -205,8 +205,7 @@ class ReferenceDataService:
                 "BirthDate": record.birth_date,
                 "StudyDate": record.study_date,
                 "StudyDescription": record.study_description,
-                "AgeYears": record.age_years,
-                "AgeMonths": record.age_months,
+                "PatientAge": record.patient_age,
             }
 
             for sv in record.structure_values:
@@ -363,8 +362,7 @@ class ReferenceDataService:
 
         for _, row in df.iterrows():
             # Get age values (already calculated in process_csv_input)
-            age_years = row.get("AgeYears")
-            age_months = row.get("AgeMonths")
+            patient_age = row.get("PatientAge")
 
             # Create patient record with pre-calculated age
             patient_record = PatientRecord(
@@ -373,8 +371,7 @@ class ReferenceDataService:
                 birth_date=str(row.get("BirthDate", "")),
                 study_date=str(row.get("StudyDate", "")),
                 study_description=row.get("StudyDescription"),
-                age_years=int(age_years) if pd.notna(age_years) else None,
-                age_months=int(age_months) if pd.notna(age_months) else None,
+                patient_age=float(patient_age) if pd.notna(patient_age) else None,
             )
             self.session.add(patient_record)
             self.session.flush()  # Get the ID

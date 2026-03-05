@@ -97,6 +97,7 @@ class PatientResult(BaseModel):
     value: float
     reference_mean: float | None
     reference_sd: float | None
+    is_extrapolated: bool = False
 
 
 class PatientCalculationResponse(BaseModel):

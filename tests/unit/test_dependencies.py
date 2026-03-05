@@ -40,6 +40,23 @@ class TestUserDataset:
 
         assert exc_info.value.status_code == 404
 
+    async def test_user_cannot_access_other_users_dataset(
+        self, test_session, test_dataset_db
+    ):
+        """Verify dependency raises 404 when dataset belongs to a different user."""
+        other_user = User(username="other-user", hashed_password="hashed")
+        test_session.add(other_user)
+        test_session.flush()
+
+        with pytest.raises(HTTPException) as exc_info:
+            await get_user_dataset(
+                dataset_id=test_dataset_db.id,
+                current_user=other_user,
+                session=test_session,
+            )
+
+        assert exc_info.value.status_code == 404
+
 
 class TestValidatedFiles:
     """Tests for get_validated_files dependency."""

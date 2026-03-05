@@ -8,6 +8,8 @@ from unittest.mock import patch
 
 import pandas as pd
 
+import pytest
+
 from app.fastapi.services.reference_data import (
     ReferenceDataService,
     ReferenceSummary,
@@ -15,17 +17,20 @@ from app.fastapi.services.reference_data import (
 )
 from app.fastapi.utils.file_utils import PatientDataProcessor
 
-MOCK_PATIENT_DFS = [
-    pd.DataFrame(
-        {
-            "PatientID": ["p1", "p2"],
-            "AgeYears": [25, 35],
-            "StudyDate": ["2024-01-01", "2024-01-02"],
-            "StudyDescription": ["scan1", "scan2"],
-            "hippo": [0.5, 0.6],
-        }
-    )
-]
+@pytest.fixture
+def mock_patient_dfs():
+    """Create fresh mock patient DataFrames per test to prevent cross-test contamination."""
+    return [
+        pd.DataFrame(
+            {
+                "PatientID": ["p1", "p2"],
+                "PatientAge": [25, 35],
+                "StudyDate": ["2024-01-01", "2024-01-02"],
+                "StudyDescription": ["scan1", "scan2"],
+                "hippo": [0.5, 0.6],
+            }
+        )
+    ]
 
 
 class TestUploadData:
@@ -36,12 +41,12 @@ class TestUploadData:
     against the test DB, including duplicate detection.
     """
 
-    def test_upload_success(self, client, test_user_token, test_dataset):
+    def test_upload_success(self, client, test_user_token, test_dataset, mock_patient_dfs):
         """Verify successful upload inserts records and returns correct message."""
         with patch.object(
             PatientDataProcessor,
             "process_files",
-            return_value=MOCK_PATIENT_DFS,
+            return_value=mock_patient_dfs,
         ):
             response = client.post(
                 f"/api/datasets/{test_dataset['id']}/upload",
@@ -64,12 +69,12 @@ class TestUploadData:
             == "Successfully added 2 records to 'test-dataset'"
         )
 
-    def test_upload_duplicates(self, client, test_user_token, test_dataset):
+    def test_upload_duplicates(self, client, test_user_token, test_dataset, mock_patient_dfs):
         """Verify second upload of same data detects duplicates and adds 0 records."""
         with patch.object(
             PatientDataProcessor,
             "process_files",
-            return_value=MOCK_PATIENT_DFS,
+            return_value=mock_patient_dfs,
         ):
             _ = client.post(
                 f"/api/datasets/{test_dataset['id']}/upload",

@@ -62,7 +62,7 @@ def mock_fit_results():
 
 @pytest.fixture
 def mock_reference_df():
-    return pd.DataFrame({"AgeYears": [1, 2], "hippo": [0.5, 0.6]})
+    return pd.DataFrame({"PatientAge": [1, 2], "hippo": [0.5, 0.6]})
 
 
 def parse_sse_events(raw_text: str) -> list[dict[str, Any]]:
@@ -97,7 +97,7 @@ class TestFitDatasetModels:
             patch.object(
                 CalculationService,
                 "fit_reference_models",
-                return_value=async_iter(mock_fit_results),
+                side_effect=lambda **kw: async_iter(mock_fit_results),
             ),
             patch.object(
                 ReferenceDataService,
@@ -115,8 +115,12 @@ class TestFitDatasetModels:
             )
 
         assert response.status_code == 200
-        assert response.json()["successful_count"] == 1
-        assert response.json()["failed_count"] == 0
+        data = response.json()
+        assert data["successful_count"] == 1
+        assert data["failed_count"] == 0
+        assert "results" in data
+        assert "total_time" in data
+        assert "message" in data
 
     def test_fit_empty_dataset(
         self,
@@ -154,7 +158,7 @@ class TestFitDatasetModels:
             patch.object(
                 CalculationService,
                 "fit_reference_models",
-                return_value=async_iter(mock_fit_results),
+                side_effect=lambda **kw: async_iter(mock_fit_results),
             ),
         ):
             response = client.post(
@@ -199,7 +203,7 @@ class TestCalculateOOSPercentiles:
             pd.DataFrame(
                 {
                     "PatientID": ["p1"],
-                    "AgeYears": [25],
+                    "PatientAge": [25],
                     "StudyDate": ["2024-01-01"],
                     "hippo": [0.5],
                 }
@@ -230,8 +234,10 @@ class TestCalculateOOSPercentiles:
             )
 
         assert response.status_code == 200
-        assert response.json()["patients_processed"] == 1
-        assert response.json()["structures_processed"] == 1
+        data = response.json()
+        assert data["patients_processed"] == 1
+        assert data["structures_processed"] == 1
+        assert "results" in data
 
     def test_calculate_wrong_filename(self, client, test_dataset, test_user_token):
         """Verify unsafe filename characters are rejected with 400."""
@@ -299,7 +305,7 @@ class TestCalculateOOSPercentiles:
             pd.DataFrame(
                 {
                     "PatientID": ["p1"],
-                    "AgeYears": [25],
+                    "PatientAge": [25],
                     "StudyDate": ["2024-01-01"],
                     "hippo": [0.5],
                 }

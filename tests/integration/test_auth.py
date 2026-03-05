@@ -35,6 +35,9 @@ class TestLogin:
         )
 
         assert login_response.status_code == 200
+        data = login_response.json()
+        assert "access_token" in data
+        assert data["token_type"] == "bearer"
 
     def test_invalid_user(self, client, test_user):
         """Verify wrong username returns 401."""

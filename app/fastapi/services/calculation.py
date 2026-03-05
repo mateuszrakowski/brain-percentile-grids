@@ -62,6 +62,7 @@ class PatientPercentileResult:
     value: float
     z_score: float | None = None
     percentile: float | None = None
+    is_extrapolated: bool = False
     error: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -73,6 +74,7 @@ class PatientPercentileResult:
             "value": self.value,
             "z_score": self.z_score,
             "percentile": self.percentile,
+            "is_extrapolated": self.is_extrapolated,
             "error": self.error,
         }
 
@@ -119,7 +121,7 @@ class CalculationService:
 
     # Configuration constants
     DEFAULT_PERCENTILES = [0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95]
-    X_COLUMN = "AgeYears"
+    X_COLUMN = "PatientAge"
     MIN_SAMPLES_FOR_MODEL = 10
     PERCENTILE_CURVE_POINTS = 200
 
@@ -346,7 +348,7 @@ class CalculationService:
         dataset_id : int
             The dataset ID to use models from.
         patient_data : pd.DataFrame
-            DataFrame with patient data (must have AgeYears and structure columns).
+            DataFrame with patient data (must have PatientAge and structure columns).
         structures : list[str] | None
             Structures to calculate. If None, uses all available models.
 
@@ -430,6 +432,14 @@ class CalculationService:
                     )
 
                     z_score, percentile = model.predict_patient_oos(patient_df)
+                    extrapolated = model.is_extrapolated(age)
+
+                    warning = None
+                    if extrapolated:
+                        warning = (
+                            f"Patient age {age} is outside training data range; "
+                            "prediction is extrapolated and may be unreliable"
+                        )
 
                     results.append(
                         PatientPercentileResult(
@@ -441,6 +451,8 @@ class CalculationService:
                             percentile=(
                                 float(percentile) if not np.isnan(percentile) else None
                             ),
+                            is_extrapolated=extrapolated,
+                            error=warning,
                         )
                     )
 

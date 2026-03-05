@@ -84,7 +84,7 @@ class TestGenerateSseEvents:
         assert second_progress["progress"] == 100
         assert len(events) == 3
         assert events[0].startswith("data: ")
-        assert list(first_progress.keys()) == [
+        assert set(first_progress.keys()) == {
             "type",
             "current",
             "total",
@@ -92,6 +92,70 @@ class TestGenerateSseEvents:
             "status",
             "message",
             "progress",
-        ]
+        }
         assert final_response["successful_count"] == 1
         assert final_response["failed_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_single_structure_progress_is_100(self):
+        """Verify a single-structure fit yields 100% progress."""
+        results = [
+            CalculationProgress(
+                current=1,
+                total=1,
+                structure="hippo",
+                status="fitting",
+                message="...",
+            ),
+            ReferenceCalculationResult(
+                results={},
+                successful_count=1,
+                failed_count=0,
+            ),
+        ]
+        request = ReferenceCalculationRequest()
+        mock_service = Mock()
+        mock_service.fit_reference_models = Mock(return_value=async_iter(results))
+
+        events = [e async for e in generate_sse_events(mock_service, 1, 1, request)]
+
+        progress = json.loads(events[0].removeprefix("data: ").strip())
+        assert progress["progress"] == 100
+
+    @pytest.mark.asyncio
+    async def test_final_event_contains_complete_type(self, mock_fit_results):
+        """Verify the final SSE event has type 'complete' and required fields."""
+        request = ReferenceCalculationRequest()
+        mock_service = Mock()
+        mock_service.fit_reference_models = Mock(
+            return_value=async_iter(mock_fit_results)
+        )
+
+        events = [e async for e in generate_sse_events(mock_service, 1, 1, request)]
+
+        final = json.loads(events[-1].removeprefix("data: ").strip())
+        assert final["type"] == "complete"
+        assert "results" in final
+        assert "total_time" in final
+        assert "message" in final
+
+    @pytest.mark.asyncio
+    async def test_no_progress_events_when_empty_results(self):
+        """Verify only the final event is emitted when no structures are fitted."""
+        results = [
+            ReferenceCalculationResult(
+                results={},
+                successful_count=0,
+                failed_count=0,
+            ),
+        ]
+        request = ReferenceCalculationRequest()
+        mock_service = Mock()
+        mock_service.fit_reference_models = Mock(return_value=async_iter(results))
+
+        events = [e async for e in generate_sse_events(mock_service, 1, 1, request)]
+
+        assert len(events) == 1
+        final = json.loads(events[0].removeprefix("data: ").strip())
+        assert final["type"] == "complete"
+        assert final["successful_count"] == 0
