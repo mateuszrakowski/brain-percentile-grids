@@ -74,18 +74,7 @@ def _calculate_age(birth_date: datetime, study_date: datetime) -> float:
     float
         Age in years as a continuous value (e.g., 5.25 for 5 years 3 months).
     """
-    age_years = (
-        study_date.year
-        - birth_date.year
-        - ((study_date.month, study_date.day) < (birth_date.month, birth_date.day))
-    )
-
-    age_months = study_date.month - birth_date.month
-    if study_date.day < birth_date.day:
-        age_months -= 1
-    age_months %= 12
-
-    return age_years + age_months / 12
+    return (study_date - birth_date).days / 365.25
 
 
 def process_csv_input(df: pd.DataFrame) -> pd.DataFrame:

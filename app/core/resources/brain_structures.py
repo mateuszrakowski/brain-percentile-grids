@@ -34,8 +34,6 @@ class WhiteMatterCerebral(BaseModel):
 
 
 class WhiteMatterTotal(WhiteMatterCerebral):
-    amygdala_left: str = "Ciało_migdałowate_lewe"
-    amygdala_right: str = "Ciało_migdałowate_prawe"
     brainstem: str = "Pień_mózgu"
     white_matter_cerebellum_left: str = "Istota_biała_móżdżku_lewa"
     white_matter_cerebellum_right: str = "Istota_biała_móżdżku_prawa"

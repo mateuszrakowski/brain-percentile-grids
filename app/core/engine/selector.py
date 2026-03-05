@@ -1,8 +1,12 @@
+import logging
 import os
 from typing import Any
 
+from app.core.engine.diagnostics import evaluate_worm_plot
 from app.core.engine.model import GAMLSS, FittedGAMLSSModel
 from app.core.resources.model_candidates import ModelCandidate
+
+logger = logging.getLogger(__name__)
 
 
 class GAMLSSModelSelector:
@@ -183,14 +187,42 @@ class GAMLSSModelSelector:
             print("\nNo models converged successfully.")
             return None
 
-        best_name = min(
+        # Rank by information criterion
+        ranked_names = sorted(
             successful_models,
             key=lambda name: getattr(successful_models[name], criterion),
         )
 
+        # Pick first model that passes worm plot diagnostics
+        best_name = ranked_names[0]
         best_model = successful_models[best_name]
 
-        print(f"\n🏆 Best model found: {best_name}")
+        for name in ranked_names:
+            model = successful_models[name]
+            try:
+                diagnostics = evaluate_worm_plot(
+                    model=model.model,
+                    data_table=model.data_table,
+                    x_column=model.x_column,
+                )
+                if diagnostics.passed:
+                    best_name = name
+                    best_model = model
+                    print(f"\n  Worm plot passed for {name}")
+                    break
+                else:
+                    print(f"\n  Worm plot failed for {name}: {diagnostics.failure_reasons}")
+            except Exception as e:
+                logger.warning("Worm plot evaluation failed for %s: %s", name, e)
+                continue
+        else:
+            logger.warning(
+                "No model passed worm plot diagnostics. "
+                "Falling back to BIC-best: %s",
+                best_name,
+            )
+
+        print(f"\n  Best model found: {best_name}")
         print(f"   BIC: {best_model.bic:.2f}")
         print(f"   AIC: {best_model.aic:.2f}")
         print(f"   Deviance: {best_model.deviance:.2f}")

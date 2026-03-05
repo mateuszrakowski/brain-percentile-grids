@@ -11,7 +11,7 @@ MODEL_DEFINITIONS = [
         "sigma_formula": "1",
         "complexity": 1,
         "control_params": {
-            "n_cyc": 2000,
+            "n_cyc": 500,
             "trace": False,
             "mu_step": 0.5,
             "sigma_step": 0.5,
@@ -24,7 +24,7 @@ MODEL_DEFINITIONS = [
         "sigma_formula": "1",
         "complexity": 1,
         "control_params": {
-            "n_cyc": 2000,
+            "n_cyc": 500,
             "trace": False,
             "mu_step": 0.5,
             "sigma_step": 0.5,
@@ -37,7 +37,7 @@ MODEL_DEFINITIONS = [
         "sigma_formula": "pb({x}, df=2)",
         "complexity": 2,
         "control_params": {
-            "n_cyc": 2000,
+            "n_cyc": 500,
             "trace": False,
             "mu_step": 0.5,
             "sigma_step": 0.5,
@@ -50,7 +50,7 @@ MODEL_DEFINITIONS = [
         "sigma_formula": "pb({x}, df=2)",
         "complexity": 2,
         "control_params": {
-            "n_cyc": 2000,
+            "n_cyc": 500,
             "trace": False,
             "mu_step": 0.5,
             "sigma_step": 0.5,
@@ -64,7 +64,7 @@ MODEL_DEFINITIONS = [
         "nu_formula": "1",
         "complexity": 3,
         "control_params": {
-            "n_cyc": 2000,
+            "n_cyc": 500,
             "trace": False,
             "mu_step": 0.5,
             "sigma_step": 0.5,
@@ -78,7 +78,7 @@ MODEL_DEFINITIONS = [
         "nu_formula": "pb({x}, df=2)",
         "complexity": 4,
         "control_params": {
-            "n_cyc": 2000,
+            "n_cyc": 500,
             "trace": False,
             "mu_step": 0.5,
             "sigma_step": 0.5,
@@ -93,7 +93,7 @@ MODEL_DEFINITIONS = [
         "tau_formula": "1",
         "complexity": 5,
         "control_params": {
-            "n_cyc": 2000,
+            "n_cyc": 500,
             "trace": False,
             "mu_step": 0.5,
             "sigma_step": 0.5,
@@ -110,12 +110,39 @@ MODEL_DEFINITIONS = [
         "tau_formula": "1",
         "complexity": 6,
         "control_params": {
-            "n_cyc": 2000,
+            "n_cyc": 500,
             "trace": False,
             "mu_step": 0.5,
             "sigma_step": 0.5,
             "tau_step": 0.01,
             "tau_max": 10.0,
+        },
+    },
+    {
+        "name": "Gamma_Smooth",
+        "family": "GA",
+        "mu_formula": "pb({x}, df=3)",
+        "sigma_formula": "pb({x}, df=2)",
+        "complexity": 2,
+        "control_params": {
+            "n_cyc": 500,
+            "trace": False,
+            "mu_step": 0.5,
+            "sigma_step": 0.5,
+        },
+    },
+    {
+        "name": "GeneralizedGamma_Smooth",
+        "family": "GG",
+        "mu_formula": "pb({x}, df=3)",
+        "sigma_formula": "pb({x}, df=2)",
+        "nu_formula": "1",
+        "complexity": 3,
+        "control_params": {
+            "n_cyc": 500,
+            "trace": False,
+            "mu_step": 0.5,
+            "sigma_step": 0.5,
         },
     },
 ]

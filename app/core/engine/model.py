@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import re
 from datetime import datetime
@@ -12,6 +13,8 @@ from rpy2.robjects.packages import PackageNotInstalledError
 from scipy.stats import norm
 
 from app.core.engine.environment import get_r_environment
+
+logger = logging.getLogger(__name__)
 
 r_env = get_r_environment()
 
@@ -202,7 +205,33 @@ class FittedGAMLSSModel:
             p_curve = q_function(**params_for_prediction)
             percentile_curves[p] = np.array(p_curve)
 
+        self._validate_percentile_monotonicity(percentile_curves)
+
         return percentile_curves
+
+    def _validate_percentile_monotonicity(
+        self, percentile_curves: dict[float, np.ndarray]
+    ) -> None:
+        """Check that adjacent percentile curves do not cross.
+
+        Parameters
+        ----------
+        percentile_curves : dict[float, np.ndarray]
+            Dictionary mapping percentile values to their curves.
+        """
+        sorted_percentiles = sorted(percentile_curves.keys())
+        for i in range(len(sorted_percentiles) - 1):
+            p_lower = sorted_percentiles[i]
+            p_upper = sorted_percentiles[i + 1]
+            lower_curve = percentile_curves[p_lower]
+            upper_curve = percentile_curves[p_upper]
+            if np.any(lower_curve > upper_curve):
+                logger.warning(
+                    "Percentile curves cross: %.0f%% and %.0f%% overlap at some "
+                    "prediction points. Model fit may be inadequate.",
+                    p_lower * 100,
+                    p_upper * 100,
+                )
 
     def plot_percentiles(
         self, percentile_curves: dict[float, np.ndarray]
@@ -276,6 +305,34 @@ class FittedGAMLSSModel:
         x_min = self.data_table[self.x_column].min()
         x_max = self.data_table[self.x_column].max()
         return patient_age < x_min or patient_age > x_max
+
+    def get_extrapolation_status(self, patient_age: float) -> str:
+        """Classify how close a patient age is to the training data boundary.
+
+        Parameters
+        ----------
+        patient_age : float
+            The patient's age value.
+
+        Returns
+        -------
+        str
+            ``"safe"`` if well within range, ``"near_boundary"`` if within
+            5% of the range from either end, or ``"extrapolated"`` if
+            outside the training data range.
+        """
+        x_min = self.data_table[self.x_column].min()
+        x_max = self.data_table[self.x_column].max()
+
+        if patient_age < x_min or patient_age > x_max:
+            return "extrapolated"
+
+        x_range = x_max - x_min
+        margin = 0.05 * x_range
+        if patient_age < x_min + margin or patient_age > x_max - margin:
+            return "near_boundary"
+
+        return "safe"
 
     def predict_patient_oos(self, patient_data: pd.DataFrame) -> tuple[float, float]:
         """
