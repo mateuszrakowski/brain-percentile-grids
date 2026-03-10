@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Brain Percentile Grids - GAMLSS-based percentile calculations for neuroimaging data">
+    <title>Brain Percentile Grids</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+
+    <!-- ================================================================
+         Header
+         ================================================================ -->
+    <header class="app-header" role="banner">
+        <h1 class="app-header__title">Brain Percentile Grids</h1>
+        <div class="app-header__actions">
+            <span id="header-username" class="app-header__user hidden"></span>
+            <button id="btn-logout" class="btn btn--ghost hidden" type="button">
+                Logout
+            </button>
+        </div>
+    </header>
+
+    <main class="app-main" role="main">
+
+        <!-- ============================================================
+             Login / Register View
+             ============================================================ -->
+        <section id="view-auth" class="login-container" aria-label="Authentication">
+            <div class="login-card">
+                <h2 class="login-card__title">Sign In</h2>
+                <p class="login-card__subtitle">
+                    Enter your credentials to access the application
+                </p>
+
+                <form id="form-auth" novalidate>
+                    <div class="form-group">
+                        <label for="auth-username" class="form-label">Username</label>
+                        <input
+                            type="text"
+                            id="auth-username"
+                            class="form-input"
+                            placeholder="Enter username"
+                            autocomplete="username"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="auth-password" class="form-label">Password</label>
+                        <input
+                            type="password"
+                            id="auth-password"
+                            class="form-input"
+                            placeholder="Enter password"
+                            autocomplete="current-password"
+                            required
+                        >
+                    </div>
+
+                    <div class="login-card__actions">
+                        <button type="submit" id="btn-login" class="btn btn--primary">
+                            Login
+                        </button>
+                        <button type="button" id="btn-register" class="btn btn--secondary">
+                            Register
+                        </button>
+                    </div>
+
+                    <div id="auth-error" class="login-card__error" role="alert"></div>
+                </form>
+            </div>
+        </section>
+
+        <!-- ============================================================
+             Authenticated App View
+             ============================================================ -->
+        <section id="view-app" class="hidden" aria-label="Application">
+
+            <!-- Tab Navigation -->
+            <nav class="tabs" aria-label="Main navigation">
+                <ul class="tabs__list" role="tablist">
+                    <li class="tabs__item" role="presentation">
+                        <button
+                            class="tabs__btn is-active"
+                            role="tab"
+                            id="tab-datasets"
+                            aria-controls="panel-datasets"
+                            aria-selected="true"
+                            data-tab="datasets"
+                        >
+                            Datasets
+                        </button>
+                    </li>
+                    <li class="tabs__item" role="presentation">
+                        <button
+                            class="tabs__btn"
+                            role="tab"
+                            id="tab-upload"
+                            aria-controls="panel-upload"
+                            aria-selected="false"
+                            tabindex="-1"
+                            data-tab="upload"
+                        >
+                            Upload
+                        </button>
+                    </li>
+                    <li class="tabs__item" role="presentation">
+                        <button
+                            class="tabs__btn"
+                            role="tab"
+                            id="tab-train"
+                            aria-controls="panel-train"
+                            aria-selected="false"
+                            tabindex="-1"
+                            data-tab="train"
+                        >
+                            Train
+                        </button>
+                    </li>
+                    <li class="tabs__item" role="presentation">
+                        <button
+                            class="tabs__btn"
+                            role="tab"
+                            id="tab-results"
+                            aria-controls="panel-results"
+                            aria-selected="false"
+                            tabindex="-1"
+                            data-tab="results"
+                        >
+                            Results
+                        </button>
+                    </li>
+                    <li class="tabs__item" role="presentation">
+                        <button
+                            class="tabs__btn"
+                            role="tab"
+                            id="tab-oos"
+                            aria-controls="panel-oos"
+                            aria-selected="false"
+                            tabindex="-1"
+                            data-tab="oos"
+                        >
+                            OOS Calculation
+                        </button>
+                    </li>
+                </ul>
+            </nav>
+
+            <!-- ========================================================
+                 Tab Panel: Datasets
+                 ======================================================== -->
+            <div
+                class="tab-panel is-active"
+                role="tabpanel"
+                id="panel-datasets"
+                aria-labelledby="tab-datasets"
+            >
+                <!-- Dataset List View -->
+                <div id="datasets-list-view">
+                    <div class="section-header">
+                        <h2 class="section-header__title">Datasets</h2>
+                        <div class="section-header__actions">
+                            <button
+                                type="button"
+                                id="btn-new-dataset"
+                                class="btn btn--primary"
+                            >
+                                New Dataset
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="datasets-grid" class="dataset-grid">
+                        <!-- Dataset cards rendered by JS -->
+                    </div>
+
+                    <div id="datasets-empty" class="empty-state hidden">
+                        <div class="empty-state__icon" aria-hidden="true">&#x1D4D3;</div>
+                        <h3 class="empty-state__title">No datasets yet</h3>
+                        <p class="empty-state__text">
+                            Create your first dataset to start uploading
+                            neuroimaging reference data.
+                        </p>
+                    </div>
+
+                    <div id="datasets-loading" class="empty-state hidden">
+                        <div class="spinner spinner--lg"></div>
+                        <p class="empty-state__text mt-md">Loading datasets...</p>
+                    </div>
+                </div>
+
+                <!-- Dataset Detail View -->
+                <div id="datasets-detail-view" class="hidden">
+                    <button type="button" id="btn-back-datasets" class="back-link">
+                        &larr; Back to datasets
+                    </button>
+
+                    <div class="section-header">
+                        <div>
+                            <h2 id="detail-dataset-name" class="section-header__title"></h2>
+                            <p id="detail-dataset-desc" class="text-muted mt-sm"></p>
+                        </div>
+                        <div class="section-header__actions">
+                            <span id="detail-dataset-badges"></span>
+                        </div>
+                    </div>
+
+                    <div id="detail-dataset-meta" class="card__meta mb-lg"></div>
+
+                    <h3 class="mb-sm">Patient Records</h3>
+                    <div id="detail-data-table" class="table-container">
+                        <table class="table table--compact">
+                            <thead>
+                                <tr>
+                                    <th>Patient ID</th>
+                                    <th>Study Date</th>
+                                    <th>Created At</th>
+                                </tr>
+                            </thead>
+                            <tbody id="detail-data-tbody">
+                                <!-- Rows rendered by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div id="detail-data-empty" class="empty-state hidden">
+                        <h3 class="empty-state__title">No data uploaded</h3>
+                        <p class="empty-state__text">
+                            Go to the Upload tab to add patient records to this dataset.
+                        </p>
+                    </div>
+
+                    <h3 class="mt-lg mb-sm">Fitted Models</h3>
+                    <div id="detail-models-table" class="table-container">
+                        <table class="table table--compact">
+                            <thead>
+                                <tr>
+                                    <th>Structure</th>
+                                    <th>Family</th>
+                                    <th>AIC</th>
+                                    <th>BIC</th>
+                                    <th>Created At</th>
+                                </tr>
+                            </thead>
+                            <tbody id="detail-models-tbody">
+                                <!-- Rows rendered by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div id="detail-models-empty" class="empty-state hidden">
+                        <h3 class="empty-state__title">No models trained</h3>
+                        <p class="empty-state__text">
+                            Go to the Train tab to fit GAMLSS models for this dataset.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================================
+                 Tab Panel: Upload
+                 ======================================================== -->
+            <div
+                class="tab-panel"
+                role="tabpanel"
+                id="panel-upload"
+                aria-labelledby="tab-upload"
+                hidden
+            >
+                <div class="section-header">
+                    <h2 class="section-header__title">Upload Data</h2>
+                </div>
+
+                <div class="controls-bar">
+                    <div class="form-group">
+                        <label for="upload-dataset-select" class="form-label">
+                            Dataset
+                        </label>
+                        <select id="upload-dataset-select" class="form-select">
+                            <option value="">Select a dataset...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div
+                    id="upload-zone"
+                    class="upload-zone"
+                    role="button"
+                    tabindex="0"
+                    aria-label="Drop files here or click to browse"
+                >
+                    <div class="upload-zone__icon" aria-hidden="true">&#x21EA;</div>
+                    <p class="upload-zone__text">
+                        <strong>Click to browse</strong> or drag and drop files here
+                    </p>
+                    <p class="upload-zone__hint">
+                        Supported formats: CSV, XLSX
+                    </p>
+                    <input
+                        type="file"
+                        id="upload-file-input"
+                        accept=".csv,.xlsx,.xls"
+                        multiple
+                        aria-hidden="true"
+                    >
+                    <ul id="upload-file-list" class="upload-zone__file-list"></ul>
+                </div>
+
+                <div class="mt-md">
+                    <button
+                        type="button"
+                        id="btn-upload"
+                        class="btn btn--primary btn--lg"
+                        disabled
+                    >
+                        Upload Files
+                    </button>
+                </div>
+
+                <div id="upload-results" class="card mt-lg hidden">
+                    <h3 class="card__title">Upload Results</h3>
+                    <div id="upload-results-content" class="mt-sm"></div>
+                </div>
+            </div>
+
+            <!-- ========================================================
+                 Tab Panel: Train
+                 ======================================================== -->
+            <div
+                class="tab-panel"
+                role="tabpanel"
+                id="panel-train"
+                aria-labelledby="tab-train"
+                hidden
+            >
+                <div class="section-header">
+                    <h2 class="section-header__title">Train Models</h2>
+                </div>
+
+                <div class="controls-bar">
+                    <div class="form-group">
+                        <label for="train-dataset-select" class="form-label">
+                            Dataset
+                        </label>
+                        <select id="train-dataset-select" class="form-select">
+                            <option value="">Select a dataset...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="card mb-lg">
+                    <h3 class="card__title">Brain Structures</h3>
+                    <p class="card__description">
+                        Select the structures to fit GAMLSS models for.
+                        Leave all unchecked to train on all available structures.
+                    </p>
+                    <div id="train-structures" class="checkbox-group">
+                        <!-- Checkboxes rendered by JS -->
+                    </div>
+                    <div id="train-structures-empty" class="text-muted mt-sm hidden">
+                        Select a dataset with uploaded data to see available structures.
+                    </div>
+                </div>
+
+                <div class="card mb-lg">
+                    <h3 class="card__title">Percentile Configuration</h3>
+                    <p class="card__description">
+                        Define the percentiles to calculate for the fitted models.
+                    </p>
+                    <div class="form-group">
+                        <label for="train-percentiles" class="form-label">
+                            Percentiles (comma-separated, values between 0 and 1)
+                        </label>
+                        <input
+                            type="text"
+                            id="train-percentiles"
+                            class="form-input"
+                            value="0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95"
+                            placeholder="e.g. 0.05, 0.25, 0.50, 0.75, 0.95"
+                        >
+                    </div>
+                </div>
+
+                <button
+                    type="button"
+                    id="btn-train"
+                    class="btn btn--primary btn--lg"
+                    disabled
+                >
+                    Train Models
+                </button>
+
+                <!-- Training progress -->
+                <div id="train-progress" class="card mt-lg hidden">
+                    <h3 class="card__title">Training Progress</h3>
+                    <p id="train-progress-status" class="progress__status"></p>
+                    <div class="progress">
+                        <div class="progress__bar-container">
+                            <div id="train-progress-bar" class="progress__bar"></div>
+                        </div>
+                        <div class="progress__label">
+                            <span id="train-progress-structure"></span>
+                            <span id="train-progress-percent">0%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Training results -->
+                <div id="train-results" class="card mt-lg hidden">
+                    <h3 class="card__title">Training Results</h3>
+                    <div id="train-results-summary" class="mb-md"></div>
+                    <div id="train-results-table" class="table-container">
+                        <table class="table table--compact">
+                            <thead>
+                                <tr>
+                                    <th>Structure</th>
+                                    <th>Family</th>
+                                    <th>AIC</th>
+                                    <th>BIC</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="train-results-tbody">
+                                <!-- Rows rendered by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================================
+                 Tab Panel: Results
+                 ======================================================== -->
+            <div
+                class="tab-panel"
+                role="tabpanel"
+                id="panel-results"
+                aria-labelledby="tab-results"
+                hidden
+            >
+                <div class="section-header">
+                    <h2 class="section-header__title">Results</h2>
+                </div>
+
+                <div class="controls-bar">
+                    <div class="form-group">
+                        <label for="results-dataset-select" class="form-label">
+                            Dataset
+                        </label>
+                        <select id="results-dataset-select" class="form-select">
+                            <option value="">Select a dataset...</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="results-structure-select" class="form-label">
+                            Structure
+                        </label>
+                        <select id="results-structure-select" class="form-select" disabled>
+                            <option value="">Select a structure...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="results-chart-area" class="hidden">
+                    <div class="chart-container">
+                        <canvas id="results-chart" aria-label="Percentile curves chart"></canvas>
+                    </div>
+                </div>
+
+                <div id="results-empty" class="empty-state">
+                    <h3 class="empty-state__title">No results to display</h3>
+                    <p class="empty-state__text">
+                        Select a dataset and structure with fitted models
+                        to view percentile curves.
+                    </p>
+                </div>
+
+                <div id="results-ref-data" class="mt-lg hidden">
+                    <h3 class="mb-sm">Reference Data</h3>
+                    <div class="table-container">
+                        <table class="table table--compact">
+                            <thead id="results-ref-thead">
+                                <tr>
+                                    <th>Age</th>
+                                    <!-- Percentile columns rendered by JS -->
+                                </tr>
+                            </thead>
+                            <tbody id="results-ref-tbody">
+                                <!-- Rows rendered by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================================
+                 Tab Panel: OOS Calculation
+                 ======================================================== -->
+            <div
+                class="tab-panel"
+                role="tabpanel"
+                id="panel-oos"
+                aria-labelledby="tab-oos"
+                hidden
+            >
+                <div class="section-header">
+                    <h2 class="section-header__title">Out-of-Sample Calculation</h2>
+                </div>
+
+                <div class="controls-bar">
+                    <div class="form-group">
+                        <label for="oos-dataset-select" class="form-label">
+                            Dataset
+                        </label>
+                        <select id="oos-dataset-select" class="form-select">
+                            <option value="">Select a dataset...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div
+                    id="oos-upload-zone"
+                    class="upload-zone"
+                    role="button"
+                    tabindex="0"
+                    aria-label="Drop patient files here or click to browse"
+                >
+                    <div class="upload-zone__icon" aria-hidden="true">&#x21EA;</div>
+                    <p class="upload-zone__text">
+                        <strong>Click to browse</strong> or drag and drop patient data files
+                    </p>
+                    <p class="upload-zone__hint">
+                        Supported formats: CSV, XLSX
+                    </p>
+                    <input
+                        type="file"
+                        id="oos-file-input"
+                        accept=".csv,.xlsx,.xls"
+                        multiple
+                        aria-hidden="true"
+                    >
+                    <ul id="oos-file-list" class="upload-zone__file-list"></ul>
+                </div>
+
+                <div class="mt-md">
+                    <button
+                        type="button"
+                        id="btn-oos-calculate"
+                        class="btn btn--primary btn--lg"
+                        disabled
+                    >
+                        Calculate Percentiles
+                    </button>
+                </div>
+
+                <div id="oos-results" class="mt-lg hidden">
+                    <div class="section-header">
+                        <h3 class="section-header__title">Calculation Results</h3>
+                        <div class="section-header__actions">
+                            <span id="oos-results-summary" class="text-muted"></span>
+                        </div>
+                    </div>
+
+                    <div class="table-container">
+                        <table class="table table--compact">
+                            <thead>
+                                <tr>
+                                    <th>Patient ID</th>
+                                    <th>Structure</th>
+                                    <th>Percentile</th>
+                                    <th>Z-Score</th>
+                                    <th>Age</th>
+                                    <th>Value</th>
+                                    <th>Extrapolated</th>
+                                </tr>
+                            </thead>
+                            <tbody id="oos-results-tbody">
+                                <!-- Rows rendered by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div id="oos-errors" class="mt-md hidden">
+                        <h4 class="text-error mb-sm">Errors</h4>
+                        <ul id="oos-errors-list"></ul>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+        <!-- /view-app -->
+
+    </main>
+
+    <!-- ================================================================
+         Toast Notification Container
+         ================================================================ -->
+    <div id="toast-container" class="toast-container" role="status" aria-live="polite"></div>
+
+    <!-- ================================================================
+         Modal: Create Dataset
+         ================================================================ -->
+    <div id="modal-create-dataset" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-create-dataset-title">
+        <div class="modal">
+            <div class="modal__header">
+                <h2 id="modal-create-dataset-title" class="modal__title">
+                    Create New Dataset
+                </h2>
+                <button
+                    type="button"
+                    class="modal__close"
+                    data-modal-close
+                    aria-label="Close dialog"
+                >&times;</button>
+            </div>
+            <form id="form-create-dataset">
+                <div class="modal__body">
+                    <div class="form-group">
+                        <label for="dataset-name" class="form-label">Name</label>
+                        <input
+                            type="text"
+                            id="dataset-name"
+                            class="form-input"
+                            placeholder="e.g. Pediatric MRI Study 2025"
+                            maxlength="100"
+                            required
+                        >
+                    </div>
+                    <div class="form-group">
+                        <label for="dataset-description" class="form-label">
+                            Description
+                            <span class="text-muted">(optional)</span>
+                        </label>
+                        <textarea
+                            id="dataset-description"
+                            class="form-textarea"
+                            placeholder="Brief description of this dataset"
+                        ></textarea>
+                    </div>
+                </div>
+                <div class="modal__footer">
+                    <button type="button" class="btn btn--secondary" data-modal-close>
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn--primary">
+                        Create Dataset
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================================================================
+         Scripts
+         ================================================================ -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script type="module" src="/static/js/app.js"></script>
+
+</body>
+</html>

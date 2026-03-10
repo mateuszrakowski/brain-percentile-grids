@@ -12,7 +12,8 @@ import rpy2.rinterface as rinterface
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.fastapi.models.responses import ErrorResponse, HealthResponse
 
@@ -100,7 +101,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_credentials=settings.cors_allow_credentials,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["*"],
     expose_headers=["X-Request-ID"],
 )
@@ -205,44 +206,17 @@ async def global_exception_handler(request: Request, exc: Exception):
 @app.get("/", response_class=HTMLResponse)
 async def root():
     """
-    Root endpoint - API information.
+    Root endpoint - serves the SPA frontend.
 
     Returns
     -------
-    HTMLResponse
-        HTML page with API information and documentation links.
+    FileResponse
+        The index.html file for the single-page application.
     """
-    html_content = f"""
-    <html>
-        <head>
-            <title>{settings.app_name}</title>
-            <style>
-                body {{ font-family: Arial, sans-serif; margin: 40px; }}
-                h1 {{ color: #333; }}
-                .info {{ background: #f0f0f0; padding: 20px; border-radius: 5px; }}
-                a {{ color: #007bff; text-decoration: none; }}
-                a:hover {{ text-decoration: underline; }}
-            </style>
-        </head>
-        <body>
-            <h1>{settings.app_name} v{settings.app_version}</h1>
-            <div class="info">
-                <p>FastAPI-based GAMLSS percentile calculation service</p>
-                <p>Environment: <strong>{settings.environment}</strong></p>
-                <ul>
-                    <li>
-                        <a href="/docs">Interactive API Documentation (Swagger UI)</a>
-                    </li>
-                    <li>
-                        <a href="/redoc">Alternative API Documentation (ReDoc)</a>
-                    </li>
-                    <li><a href="/health">Health Check</a></li>
-                </ul>
-            </div>
-        </body>
-    </html>
-    """
-    return HTMLResponse(content=html_content)
+    import pathlib
+
+    static_dir = pathlib.Path(__file__).parent / "static"
+    return FileResponse(static_dir / "index.html")
 
 
 @app.get("/health", tags=["monitoring"])
@@ -268,6 +242,12 @@ app.include_router(auth.router)
 app.include_router(datasets.router)
 app.include_router(data.router)
 app.include_router(calculations.router)
+
+# Mount static files for the frontend SPA
+import pathlib  # noqa: E402
+
+_static_dir = pathlib.Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
 
 if __name__ == "__main__":
     """Run the application with Uvicorn when executed directly."""
