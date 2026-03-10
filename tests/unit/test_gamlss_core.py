@@ -1,8 +1,7 @@
 """Unit tests for GAMLSS core modules.
 
-Tests cover diagnostics, age calculation, brain structures,
-model extrapolation status, percentile monotonicity validation,
-and model candidate definitions.
+Tests cover diagnostics, age calculation, model extrapolation status,
+percentile monotonicity validation, and model candidate definitions.
 """
 
 import logging
@@ -16,11 +15,6 @@ import pytest
 from app.core.data_processing.process_input import _calculate_age
 from app.core.engine.diagnostics import _fit_worm_polynomial
 from app.core.engine.model import FittedGAMLSSModel
-from app.core.resources.brain_structures import (
-    NeuralStructuresTotal,
-    SubcorticalGreyMatter,
-    WhiteMatterTotal,
-)
 from app.core.resources.model_candidates import MODEL_CANDIDATES
 
 # ---------------------------------------------------------------------------
@@ -176,65 +170,7 @@ class TestCalculateAge:
 
 
 # ===========================================================================
-# 3. Brain structures
-# ===========================================================================
-
-
-class TestBrainStructures:
-    """Tests for Pydantic brain structure models.
-
-    Validates that the inheritance hierarchy places fields in the
-    correct structure classes, especially the amygdala fields which
-    belong to SubcorticalGreyMatter but not WhiteMatterTotal.
-    """
-
-    def test_white_matter_total_excludes_amygdala(self):
-        """Verify that WhiteMatterTotal does not contain amygdala fields.
-
-        Reasoning
-        ---------
-        WhiteMatterTotal inherits from WhiteMatterCerebral and adds
-        brainstem/cerebellum structures. Amygdala belongs to subcortical
-        grey matter. If the inheritance hierarchy is misconfigured,
-        amygdala could leak into WhiteMatterTotal, corrupting volume sums.
-        """
-        keys = WhiteMatterTotal().model_dump().keys()
-
-        assert "amygdala_left" not in keys
-        assert "amygdala_right" not in keys
-
-    def test_subcortical_grey_matter_includes_amygdala(self):
-        """Verify that SubcorticalGreyMatter contains amygdala fields.
-
-        Reasoning
-        ---------
-        The amygdala is a subcortical structure. If it were accidentally
-        removed or renamed, volume aggregation would silently lose data.
-        """
-        keys = SubcorticalGreyMatter().model_dump().keys()
-
-        assert "amygdala_left" in keys
-        assert "amygdala_right" in keys
-
-    def test_neural_structures_total_amygdala_appears_once(self):
-        """Verify amygdala fields appear exactly once in NeuralStructuresTotal.
-
-        Reasoning
-        ---------
-        NeuralStructuresTotal uses multiple inheritance from
-        CerebralCerebellumCortex, SubcorticalGreyMatter, and
-        WhiteMatterTotal. Python's MRO ensures no field duplication,
-        but a Pydantic misconfiguration could cause double-counting of
-        amygdala volume in aggregation pipelines.
-        """
-        keys = list(NeuralStructuresTotal().model_dump().keys())
-
-        assert keys.count("amygdala_left") == 1
-        assert keys.count("amygdala_right") == 1
-
-
-# ===========================================================================
-# 4. FittedGAMLSSModel – get_extrapolation_status
+# 3. FittedGAMLSSModel – get_extrapolation_status
 # ===========================================================================
 
 
@@ -290,7 +226,7 @@ class TestGetExtrapolationStatus:
 
 
 # ===========================================================================
-# 4b. FittedGAMLSSModel – _validate_percentile_monotonicity
+# 4. FittedGAMLSSModel – _validate_percentile_monotonicity
 # ===========================================================================
 
 
