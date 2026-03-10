@@ -7,7 +7,7 @@ dataset information.
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlmodel import Session
 
@@ -72,6 +72,14 @@ class GetStructuresResponse(BaseModel):
     dataset_id: int
     structures: list[str]
     count: int
+
+
+class TableDataResponse(BaseModel):
+    """Response model for table display of all patient records."""
+
+    dataset_id: int
+    columns: list[str]
+    rows: list[dict]
 
 
 @router.post("/{dataset_id}/upload", response_model=UploadDataResponse)
@@ -245,4 +253,72 @@ async def get_dataset_structures(
         dataset_id=dataset.id,
         structures=structures,
         count=len(structures),
+    )
+
+
+@router.get("/{dataset_id}/data/table", response_model=TableDataResponse)
+async def get_dataset_table(
+    dataset: Annotated[ReferenceDataset, Depends(get_user_dataset)],
+    session: Session = Depends(get_session),
+) -> TableDataResponse:
+    """
+    Get all patient records with structure values as flat rows for table display.
+
+    Returns every patient record in the dataset along with all associated
+    structure values, formatted as a list of flat dictionaries suitable for
+    rendering in a data table.
+
+    Parameters
+    ----------
+    dataset : ReferenceDataset
+        The validated dataset (injected via dependency).
+    session : Session
+        Database session.
+
+    Returns
+    -------
+    TableDataResponse
+        Columns list and rows where each row contains patient_id,
+        study_date, patient_age, and all structure values.
+
+    Raises
+    ------
+    HTTPException
+        404 if dataset not found or has no data.
+    """
+    service = ReferenceDataService(session)
+    df = service.get_reference_dataframe(dataset.id)
+
+    if df.empty:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No data found for dataset '{dataset.name}'.",
+        )
+
+    base_columns = {
+        "PatientID",
+        "BirthDate",
+        "StudyDate",
+        "StudyDescription",
+        "PatientAge",
+    }
+    structure_columns = [col for col in df.columns if col not in base_columns]
+
+    rows = []
+    for _, row in df.iterrows():
+        row_dict = {"patient_id": row.get("PatientID")}
+        study_date = row.get("StudyDate")
+        row_dict["study_date"] = str(study_date) if study_date is not None else None
+        row_dict["patient_age"] = row.get("PatientAge")
+
+        for col in structure_columns:
+            row_dict[col] = row.get(col)
+
+        rows.append(row_dict)
+    columns = ["patient_id", "study_date", "patient_age"] + structure_columns
+
+    return TableDataResponse(
+        dataset_id=dataset.id,
+        columns=columns,
+        rows=rows,
     )

@@ -7,7 +7,6 @@ through the HTTP client (routers/data.py).
 from unittest.mock import patch
 
 import pandas as pd
-
 import pytest
 
 from app.fastapi.services.reference_data import (
@@ -16,6 +15,7 @@ from app.fastapi.services.reference_data import (
     SampleRecord,
 )
 from app.fastapi.utils.file_utils import PatientDataProcessor
+
 
 @pytest.fixture
 def mock_patient_dfs():
@@ -41,7 +41,9 @@ class TestUploadData:
     against the test DB, including duplicate detection.
     """
 
-    def test_upload_success(self, client, test_user_token, test_dataset, mock_patient_dfs):
+    def test_upload_success(
+        self, client, test_user_token, test_dataset, mock_patient_dfs
+    ):
         """Verify successful upload inserts records and returns correct message."""
         with patch.object(
             PatientDataProcessor,
@@ -69,7 +71,9 @@ class TestUploadData:
             == "Successfully added 2 records to 'test-dataset'"
         )
 
-    def test_upload_duplicates(self, client, test_user_token, test_dataset, mock_patient_dfs):
+    def test_upload_duplicates(
+        self, client, test_user_token, test_dataset, mock_patient_dfs
+    ):
         """Verify second upload of same data detects duplicates and adds 0 records."""
         with patch.object(
             PatientDataProcessor,
@@ -196,6 +200,96 @@ class TestClearDatasetData:
         assert data["dataset_id"] == test_dataset["id"]
         assert data["records_deleted"] == 0
         assert data["message"] == "Deleted 0 records from 'test-dataset'"
+
+
+class TestGetDatasetTable:
+    """Tests for GET /api/datasets/{id}/data/table."""
+
+    @pytest.fixture
+    def mock_table_df(self):
+        """DataFrame matching the table endpoint's expected structure."""
+        return pd.DataFrame(
+            {
+                "PatientID": ["p1", "p2"],
+                "BirthDate": ["2020-01-01", "2020-01-02"],
+                "StudyDate": ["2024-01-01", "2024-01-02"],
+                "StudyDescription": ["scan1", "scan2"],
+                "PatientAge": [4.0, 4.0],
+                "hippo": [1500.5, 1600.3],
+            }
+        )
+
+    def test_table_returns_columns_and_rows(
+        self, client, test_user_token, test_dataset, mock_table_df
+    ):
+        """Verify table response contains columns list and rows dicts."""
+        with patch.object(
+            ReferenceDataService,
+            "get_reference_dataframe",
+            return_value=mock_table_df,
+        ):
+            response = client.get(
+                f"/api/datasets/{test_dataset['id']}/data/table",
+                headers={"Authorization": f"Bearer {test_user_token}"},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data["columns"], list)
+        assert isinstance(data["rows"], list)
+        assert len(data["rows"]) == 2
+
+    def test_table_empty_dataset_returns_404(
+        self, client, test_user_token, test_dataset
+    ):
+        """Verify empty dataset returns 404."""
+        with patch.object(
+            ReferenceDataService,
+            "get_reference_dataframe",
+            return_value=pd.DataFrame(),
+        ):
+            response = client.get(
+                f"/api/datasets/{test_dataset['id']}/data/table",
+                headers={"Authorization": f"Bearer {test_user_token}"},
+            )
+
+        assert response.status_code == 404
+
+    def test_table_structure_columns_present(
+        self, client, test_user_token, test_dataset, mock_table_df
+    ):
+        """Verify structure columns appear in both columns list and row dicts."""
+        with patch.object(
+            ReferenceDataService,
+            "get_reference_dataframe",
+            return_value=mock_table_df,
+        ):
+            response = client.get(
+                f"/api/datasets/{test_dataset['id']}/data/table",
+                headers={"Authorization": f"Bearer {test_user_token}"},
+            )
+
+        data = response.json()
+        assert "hippo" in data["columns"]
+        assert "hippo" in data["rows"][0]
+
+    def test_table_numeric_values_preserved(
+        self, client, test_user_token, test_dataset, mock_table_df
+    ):
+        """Verify float values round-trip correctly."""
+        with patch.object(
+            ReferenceDataService,
+            "get_reference_dataframe",
+            return_value=mock_table_df,
+        ):
+            response = client.get(
+                f"/api/datasets/{test_dataset['id']}/data/table",
+                headers={"Authorization": f"Bearer {test_user_token}"},
+            )
+
+        rows = response.json()["rows"]
+        assert rows[0]["hippo"] == pytest.approx(1500.5)
+        assert rows[1]["hippo"] == pytest.approx(1600.3)
 
 
 class TestGetDatasetStructures:

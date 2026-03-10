@@ -24,6 +24,7 @@ class TestAuthEnforcement:
             ("POST", "/api/datasets/1/fit"),
             ("POST", "/api/datasets/1/fit/stream"),
             ("POST", "/api/datasets/1/calculate"),
+            ("GET", "/api/datasets/1/data/table"),
         ],
     )
     def test_unauthenticated_request(self, client, method, path):
