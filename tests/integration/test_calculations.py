@@ -62,7 +62,9 @@ def mock_fit_results():
 
 @pytest.fixture
 def mock_reference_df():
-    return pd.DataFrame({"PatientAge": [1, 2], "hippo": [0.5, 0.6]})
+    return pd.DataFrame(
+        {"PatientAge": range(1, 26), "hippo": [0.5 + i * 0.01 for i in range(25)]}
+    )
 
 
 def parse_sse_events(raw_text: str) -> list[dict[str, Any]]:
@@ -139,6 +141,41 @@ class TestFitDatasetModels:
         )
 
         assert response.status_code == 404
+
+    def test_fit_insufficient_samples(
+        self,
+        client,
+        test_dataset,
+        test_user_token,
+    ):
+        """Verify fitting with fewer than 20 samples returns 400.
+
+        Reasoning
+        ---------
+        GAMLSS models require a minimum sample size to produce
+        meaningful fits. Datasets below this threshold should be
+        rejected early with a clear error message.
+        """
+        small_df = pd.DataFrame(
+            {"PatientAge": range(5), "hippo": [0.1, 0.2, 0.3, 0.4, 0.5]}
+        )
+        with patch.object(
+            ReferenceDataService,
+            "get_reference_dataframe",
+            return_value=small_df,
+        ):
+            response = client.post(
+                f"/api/datasets/{test_dataset['id']}/fit",
+                json={
+                    "y_columns": ["hippo"],
+                    "percentiles": [0.2, 0.5, 0.7],
+                },
+                headers={"Authorization": f"Bearer {test_user_token}"},
+            )
+
+        assert response.status_code == 400
+        assert "at least" in response.json()["detail"]
+        assert "20" in response.json()["detail"]
 
     def test_fit_stream(
         self,

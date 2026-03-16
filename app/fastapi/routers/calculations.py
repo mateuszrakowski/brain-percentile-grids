@@ -164,6 +164,16 @@ async def fit_dataset_models(
             detail=f"No reference data found in dataset '{dataset.name}'. Please upload data first.",
         )
 
+    if len(df) < CalculationService.MIN_SAMPLES_FOR_MODEL:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Dataset has {len(df)} samples, but at least "
+                f"{CalculationService.MIN_SAMPLES_FOR_MODEL} are required "
+                f"for model fitting."
+            ),
+        )
+
     # Fit models (non-streaming version)
     results: dict[str, ModelResult] = {}
     successful_count = 0
@@ -244,6 +254,16 @@ async def fit_dataset_models_stream(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No reference data found in dataset '{dataset.name}'. Please upload data first.",
+        )
+
+    if len(df) < CalculationService.MIN_SAMPLES_FOR_MODEL:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Dataset has {len(df)} samples, but at least "
+                f"{CalculationService.MIN_SAMPLES_FOR_MODEL} are required "
+                f"for model fitting."
+            ),
         )
 
     service = CalculationService(session)

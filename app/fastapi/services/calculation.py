@@ -122,7 +122,7 @@ class CalculationService:
     # Configuration constants
     DEFAULT_PERCENTILES = [0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95]
     X_COLUMN = "PatientAge"
-    MIN_SAMPLES_FOR_MODEL = 10
+    MIN_SAMPLES_FOR_MODEL = 20
     PERCENTILE_CURVE_POINTS = 200
 
     def __init__(self, session: Session):
