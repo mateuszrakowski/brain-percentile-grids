@@ -123,7 +123,7 @@ class FittedGAMLSSModel:
         str
             Space-separated name (e.g., 'Cerebral Cortex').
         """
-        return re.sub(r"(?<!^)(?=[A-Z])", " ", structure_name)
+        return re.sub(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", " ", structure_name)
 
     def save(self, model_path: str, run_info_path: str | None = None) -> None:
         """

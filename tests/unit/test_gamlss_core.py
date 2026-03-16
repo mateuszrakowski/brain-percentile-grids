@@ -170,7 +170,7 @@ class TestCalculateAge:
 
 
 # ===========================================================================
-# 3. FittedGAMLSSModel – get_extrapolation_status
+# 3. FittedGAMLSSModel
 # ===========================================================================
 
 
@@ -224,10 +224,25 @@ class TestGetExtrapolationStatus:
         """
         assert model.get_extrapolation_status(3.0) == "extrapolated"
 
+    def test_at_exact_boundary(self, model: FittedGAMLSSModel):
+        """Verify that age at the exact min boundary is ``"near_boundary"``.
 
-# ===========================================================================
-# 4. FittedGAMLSSModel – _validate_percentile_monotonicity
-# ===========================================================================
+        Reasoning
+        ---------
+        Margin = 0.05 * (15 - 5) = 0.5, so near-boundary zone is
+        [5.0, 5.5]. Code uses strict ``<`` so age=5.0 falls in this zone.
+        """
+        assert "near_boundary" == model.get_extrapolation_status(5.0)
+
+    def test_outside_margin(self, model: FittedGAMLSSModel):
+        """Verify that age just outside the margin is ``"safe"``.
+
+        Reasoning
+        ---------
+        5.6 > 5.0 + 0.5, so not near-boundary. Confirms margin is
+        ``0.05 * x_range``, not an absolute value.
+        """
+        assert "safe" == model.get_extrapolation_status(5.6)
 
 
 class TestValidatePercentileMonotonicity:
@@ -288,6 +303,126 @@ class TestValidatePercentileMonotonicity:
             model._validate_percentile_monotonicity(curves)
 
         assert "cross" in caplog.text.lower()
+
+
+class TestSplitStructureName:
+    """Tests for ``FittedGAMLSSModel._split_structure_name``.
+
+    Validates the static regex helper that inserts spaces into
+    PascalCase structure names for use in plot titles.
+    """
+
+    def test_pascal_case_split(self):
+        """Two-word PascalCase name is split correctly.
+
+        Reasoning
+        ---------
+        Core use case. If this breaks, every percentile grid plot
+        has garbled titles.
+        """
+        assert (
+            FittedGAMLSSModel._split_structure_name("CerebralCortex")
+            == "Cerebral Cortex"
+        )
+
+    def test_single_word_unchanged(self):
+        """Single-word name passes through without modification.
+
+        Reasoning
+        ---------
+        Several brain structures are single words. The regex must
+        not corrupt them.
+        """
+        assert FittedGAMLSSModel._split_structure_name("Thalamus") == "Thalamus"
+
+    def test_consecutive_capitals_preserved(self):
+        """Acronym followed by a word keeps the acronym intact.
+
+        Reasoning
+        ---------
+        Abbreviations like CSF appear in structure names. A naive
+        regex would produce ``"C S F Total"``.
+        """
+        assert FittedGAMLSSModel._split_structure_name("CSFTotal") == "CSF Total"
+
+    def test_empty_string_returns_empty(self):
+        """Empty input returns an empty string.
+
+        Reasoning
+        ---------
+        Defensive edge case. Method could be called with an empty
+        string if the structure name is missing from data.
+        """
+        assert FittedGAMLSSModel._split_structure_name("") == ""
+
+
+class TestIsExtrapolated:
+    """Tests for ``FittedGAMLSSModel.is_extrapolated``.
+
+    Validates that the boolean extrapolation check correctly identifies
+    ages inside vs. outside the training data range [5.0, 15.0].
+    """
+
+    @pytest.fixture
+    def model(self) -> FittedGAMLSSModel:
+        """Create a FittedGAMLSSModel with x_column range [5.0, 15.0].
+
+        Returns
+        -------
+        FittedGAMLSSModel
+            Model whose training data spans ages 5.0 to 15.0.
+        """
+        df = pd.DataFrame({"age": [5.0, 10.0, 15.0]})
+        return _make_fitted_model(df, x_column="age")
+
+    def test_age_inside_range(self, model: FittedGAMLSSModel):
+        """Verify that an age within the training range returns False.
+
+        Reasoning
+        ---------
+        Happy path. Confirms predictions within training range
+        aren't falsely flagged.
+        """
+        assert not model.is_extrapolated(7.0)
+
+    def test_age_below_range(self, model: FittedGAMLSSModel):
+        """Verify that an age below the training range returns True.
+
+        Reasoning
+        ---------
+        Boundary violation. A false negative means clinicians trust
+        extrapolated predictions.
+        """
+        assert model.is_extrapolated(3.0)
+
+    def test_age_above_range(self, model: FittedGAMLSSModel):
+        """Verify that an age above the training range returns True.
+
+        Reasoning
+        ---------
+        Same risk on the upper bound.
+        """
+        assert model.is_extrapolated(20.0)
+
+    def test_age_at_min_boundary(self, model: FittedGAMLSSModel):
+        """Verify that age at the exact min boundary returns False.
+
+        Reasoning
+        ---------
+        Edge case. Code uses strict ``<`` so the boundary itself
+        is within training data.
+        """
+        assert not model.is_extrapolated(5.0)
+
+    def test_age_at_max_boundary(self, model: FittedGAMLSSModel):
+        """Verify that age at the exact max boundary returns False.
+
+        Reasoning
+        ---------
+        Upper boundary must also be treated as within range.
+        Symmetric with min boundary test.
+        """
+        assert not model.is_extrapolated(15.0)
 
 
 # ===========================================================================
