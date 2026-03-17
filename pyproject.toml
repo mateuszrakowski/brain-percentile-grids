@@ -91,3 +91,6 @@ ignore_missing_imports = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "-v --tb=short"
+markers = [
+    "r_required: tests requiring a working R environment with gamlss packages",
+]
