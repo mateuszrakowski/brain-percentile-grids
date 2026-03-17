@@ -113,7 +113,7 @@ def process_csv_input(df: pd.DataFrame) -> pd.DataFrame:
             if pd.isna(birth_date):
                 # Try parsing as Excel serial date
                 birth_date = pd.to_datetime(
-                    head["BirthDate"].iloc[0], unit="D", origin="1899-12-30"
+                    float(head["BirthDate"].iloc[0]), unit="D", origin="1899-12-30"
                 )
         except Exception as e:
             raise ValueError(
@@ -131,7 +131,7 @@ def process_csv_input(df: pd.DataFrame) -> pd.DataFrame:
             if pd.isna(study_date):
                 # Try parsing as Excel serial date
                 study_date = pd.to_datetime(
-                    head["StudyDate"].iloc[0], unit="D", origin="1899-12-30"
+                    float(head["StudyDate"].iloc[0]), unit="D", origin="1899-12-30"
                 )
         except Exception as e:
             raise ValueError(
