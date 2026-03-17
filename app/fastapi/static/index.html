@@ -468,6 +468,15 @@
                     <div class="chart-container">
                         <canvas id="results-chart" aria-label="Percentile curves chart"></canvas>
                     </div>
+                    <div class="mt-md">
+                        <button
+                            type="button"
+                            id="btn-reference-plot"
+                            class="btn btn--secondary"
+                        >
+                            View Reference Plot (R)
+                        </button>
+                    </div>
                 </div>
 
                 <div id="results-empty" class="empty-state">
@@ -575,6 +584,7 @@
                                     <th>Age</th>
                                     <th>Value</th>
                                     <th>Extrapolated</th>
+                                    <th>Plot</th>
                                 </tr>
                             </thead>
                             <tbody id="oos-results-tbody">
@@ -586,6 +596,42 @@
                     <div id="oos-errors" class="mt-md hidden">
                         <h4 class="text-error mb-sm">Errors</h4>
                         <ul id="oos-errors-list"></ul>
+                    </div>
+                </div>
+
+                <!-- Calculation History -->
+                <div id="oos-history" class="mt-lg">
+                    <div class="section-header">
+                        <h3 class="section-header__title">Calculation History</h3>
+                        <div class="section-header__actions">
+                            <label class="checkbox-item">
+                                <input type="checkbox" id="oos-show-stale">
+                                Show stale
+                            </label>
+                            <button
+                                type="button"
+                                id="btn-oos-refresh-history"
+                                class="btn btn--secondary btn--sm"
+                            >
+                                Refresh
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="oos-history-list">
+                        <!-- Calculation history cards rendered by JS -->
+                    </div>
+
+                    <div id="oos-history-empty" class="empty-state hidden">
+                        <h3 class="empty-state__title">No past calculations</h3>
+                        <p class="empty-state__text">
+                            Run an OOS calculation to see results here.
+                        </p>
+                    </div>
+
+                    <div id="oos-history-loading" class="empty-state hidden">
+                        <div class="spinner spinner--lg"></div>
+                        <p class="empty-state__text mt-md">Loading history...</p>
                     </div>
                 </div>
             </div>
@@ -650,6 +696,37 @@
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- ================================================================
+         Modal: Plot Viewer (reusable for OOS patient plots and reference plots)
+         ================================================================ -->
+    <div id="modal-plot" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-plot-title">
+        <div class="modal modal--plot">
+            <div class="modal__header">
+                <h2 id="modal-plot-title" class="modal__title">Plot</h2>
+                <button
+                    type="button"
+                    class="modal__close"
+                    data-modal-close
+                    aria-label="Close dialog"
+                >&times;</button>
+            </div>
+            <div class="modal__body modal__body--plot">
+                <div id="modal-plot-loading" class="empty-state">
+                    <div class="spinner spinner--lg"></div>
+                    <p class="empty-state__text mt-md">Loading plot...</p>
+                </div>
+                <img
+                    id="modal-plot-image"
+                    class="plot-image hidden"
+                    alt="Plot"
+                >
+                <p id="modal-plot-error" class="text-error hidden">
+                    Failed to load plot image.
+                </p>
+            </div>
         </div>
     </div>
 

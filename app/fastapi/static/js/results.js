@@ -1,5 +1,5 @@
 import * as api from './api.js';
-import { showToast, show, hide, escapeHtml } from './components.js';
+import { showToast, show, hide, escapeHtml, openPlotModal } from './components.js';
 import { getTrainingResults } from './training.js';
 
 let chartInstance = null;
@@ -59,6 +59,14 @@ export function initResults() {
         const datasetId = datasetSelect.value;
         if (!structure || !datasetId) return;
         loadPercentileCurves(datasetId, structure);
+    });
+
+    document.getElementById('btn-reference-plot').addEventListener('click', () => {
+        const datasetId = datasetSelect.value;
+        const structure = structureSelect.value;
+        if (!datasetId || !structure) return;
+        const url = api.calculations.getReferencePlotUrl(datasetId, structure);
+        openPlotModal(`Reference Plot: ${structure}`, url, api.getToken());
     });
 }
 

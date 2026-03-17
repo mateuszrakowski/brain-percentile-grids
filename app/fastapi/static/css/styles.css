@@ -1096,6 +1096,137 @@ img {
 }
 
 /* --------------------------------------------------------------------------
+   Plot Modal
+   -------------------------------------------------------------------------- */
+.modal--plot {
+    max-width: 900px;
+}
+
+.modal__body--plot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 200px;
+}
+
+.plot-image {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--radius-sm);
+}
+
+/* --------------------------------------------------------------------------
+   Calculation History
+   -------------------------------------------------------------------------- */
+.calc-history-card {
+    background-color: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-sm);
+    transition: box-shadow var(--transition-base);
+}
+
+.calc-history-card:hover {
+    box-shadow: var(--shadow-sm);
+}
+
+.calc-history-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-sm) var(--space-md);
+    cursor: pointer;
+    gap: var(--space-sm);
+    user-select: none;
+}
+
+.calc-history-card__header:hover {
+    background-color: var(--color-bg);
+}
+
+.calc-history-card__info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    flex: 1;
+    min-width: 0;
+    font-size: var(--font-size-sm);
+}
+
+.calc-history-card__date {
+    font-weight: 500;
+    color: var(--color-text);
+    white-space: nowrap;
+}
+
+.calc-history-card__meta {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+}
+
+.calc-history-card__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    flex-shrink: 0;
+}
+
+.calc-history-card__toggle {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    transition: transform var(--transition-fast);
+}
+
+.calc-history-card.is-expanded .calc-history-card__toggle {
+    transform: rotate(90deg);
+}
+
+.calc-history-card__body {
+    display: none;
+    padding: 0 var(--space-md) var(--space-md);
+    border-top: 1px solid var(--color-border);
+}
+
+.calc-history-card.is-expanded .calc-history-card__body {
+    display: block;
+}
+
+/* Delete confirmation inline */
+.btn--danger-sm {
+    padding: 0.2rem 0.5rem;
+    font-size: var(--font-size-xs);
+    background-color: transparent;
+    color: var(--color-text-muted);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.btn--danger-sm:hover {
+    color: var(--color-error);
+    background-color: var(--color-error-light);
+    border-color: var(--color-error);
+}
+
+/* Plot button in table */
+.btn--plot {
+    padding: 0.15rem 0.5rem;
+    font-size: var(--font-size-xs);
+    background-color: transparent;
+    color: var(--color-primary);
+    border: 1px solid var(--color-primary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+}
+
+.btn--plot:hover {
+    background-color: var(--color-primary-light);
+}
+
+/* --------------------------------------------------------------------------
    Responsive
    -------------------------------------------------------------------------- */
 @media (max-width: 767px) {
@@ -1133,6 +1264,15 @@ img {
     .toast {
         min-width: 0;
         max-width: calc(100vw - 2 * var(--space-lg));
+    }
+
+    .modal--plot {
+        max-width: 100%;
+    }
+
+    .calc-history-card__info {
+        flex-direction: column;
+        align-items: flex-start;
     }
 }
 

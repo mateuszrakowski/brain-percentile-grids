@@ -130,4 +130,16 @@ export const calculations = {
             query: structures ? { structures } : undefined,
         });
     },
+    listCalculations: (datasetId, includeStale = false) =>
+        request('GET', `/api/datasets/${datasetId}/calculations`, {
+            query: includeStale ? { include_stale: true } : undefined,
+        }),
+    getCalculation: (datasetId, calculationId) =>
+        request('GET', `/api/datasets/${datasetId}/calculations/${calculationId}`),
+    getResultPlotUrl: (datasetId, calculationId, resultId) =>
+        `/api/datasets/${datasetId}/calculations/${calculationId}/results/${resultId}/plot`,
+    getReferencePlotUrl: (datasetId, structure) =>
+        `/api/datasets/${datasetId}/models/${encodeURIComponent(structure)}/reference-plot`,
+    deleteCalculation: (datasetId, calculationId) =>
+        request('DELETE', `/api/datasets/${datasetId}/calculations/${calculationId}`),
 };

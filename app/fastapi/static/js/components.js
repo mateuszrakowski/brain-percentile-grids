@@ -133,6 +133,47 @@ export function populateDatasetSelect(selectId, datasets, selectedId) {
     });
 }
 
+// Plot modal
+export function openPlotModal(title, imageUrl, authToken) {
+    const overlay = document.getElementById('modal-plot');
+    const titleEl = document.getElementById('modal-plot-title');
+    const img = document.getElementById('modal-plot-image');
+    const loading = document.getElementById('modal-plot-loading');
+    const errorEl = document.getElementById('modal-plot-error');
+
+    titleEl.textContent = title;
+    img.classList.add('hidden');
+    img.src = '';
+    errorEl.classList.add('hidden');
+    loading.classList.remove('hidden');
+
+    overlay.classList.add('is-open');
+
+    // Load image via fetch with auth header, then create object URL
+    fetch(imageUrl, {
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {},
+    })
+        .then(res => {
+            if (!res.ok) throw new Error('Failed to load plot');
+            return res.blob();
+        })
+        .then(blob => {
+            // Revoke previous object URL if any
+            if (img.dataset.objectUrl) {
+                URL.revokeObjectURL(img.dataset.objectUrl);
+            }
+            const objectUrl = URL.createObjectURL(blob);
+            img.dataset.objectUrl = objectUrl;
+            img.src = objectUrl;
+            img.classList.remove('hidden');
+            loading.classList.add('hidden');
+        })
+        .catch(() => {
+            loading.classList.add('hidden');
+            errorEl.classList.remove('hidden');
+        });
+}
+
 // Helpers
 export function escapeHtml(str) {
     const div = document.createElement('div');
