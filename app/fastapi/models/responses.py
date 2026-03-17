@@ -104,7 +104,54 @@ class PatientCalculationResponse(BaseModel):
     """Response for patient calculations."""
 
     message: str
+    calculation_id: int
     results: list[PatientResult]
     patients_processed: int
     structures_processed: int
     errors: list[str] = []
+
+
+class OOSCalculationSummary(BaseModel):
+    """Summary of a single OOS calculation run."""
+
+    id: int
+    dataset_id: int
+    source_filenames: str | None = None
+    patients_count: int
+    structures_count: int
+    is_stale: bool = False
+    created_at: datetime
+
+
+class SavedPatientResult(BaseModel):
+    """Persisted patient result with DB id and plot availability."""
+
+    id: int
+    calculation_id: int
+    patient_id: str
+    structure: str
+    age: float
+    value: float
+    z_score: float | None
+    percentile: float | None
+    is_extrapolated: bool = False
+    error: str | None = None
+    has_plot: bool = False
+
+
+class OOSCalculationListResponse(BaseModel):
+    """Response listing OOS calculations for a dataset."""
+
+    calculations: list[OOSCalculationSummary]
+    total: int
+
+
+class OOSCalculationDetailResponse(BaseModel):
+    """Response with full results for a single OOS calculation."""
+
+    id: int
+    dataset_id: int
+    source_filenames: str | None = None
+    is_stale: bool = False
+    created_at: datetime
+    results: list[SavedPatientResult]

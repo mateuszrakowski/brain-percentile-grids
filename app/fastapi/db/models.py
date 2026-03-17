@@ -45,6 +45,10 @@ class ReferenceDataset(SQLModel, table=True):
         back_populates="dataset",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
+    oos_calculations: list["OOSCalculation"] = Relationship(
+        back_populates="dataset",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
 
 
 class PatientRecord(SQLModel, table=True):
@@ -102,6 +106,7 @@ class FittedModel(SQLModel, table=True):
     aic: float
     bic: float
     file_path: str
+    reference_plot_path: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     __table_args__ = (
@@ -114,3 +119,59 @@ class FittedModel(SQLModel, table=True):
 
     # Relationships
     dataset: ReferenceDataset = Relationship(back_populates="fitted_models")
+
+
+class OOSCalculation(SQLModel, table=True):
+    """
+    Groups results from one out-of-sample calculation run.
+
+    Each calculation represents a single upload+compute session
+    where patient files were processed against fitted models.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    dataset_id: int = Field(foreign_key="referencedataset.id", index=True)
+    source_filenames: str | None = None
+    is_stale: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    # Relationships
+    dataset: ReferenceDataset = Relationship(back_populates="oos_calculations")
+    results: list["OOSPatientResult"] = Relationship(
+        back_populates="calculation",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
+
+
+class OOSPatientResult(SQLModel, table=True):
+    """
+    One row per patient-structure pair in an OOS calculation.
+
+    Stores the computed z-score, percentile, and optional plot path
+    for a single patient's brain structure measurement.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    calculation_id: int = Field(foreign_key="ooscalculation.id", index=True)
+    patient_id: str
+    structure: str
+    age: float
+    value: float
+    z_score: float | None = None
+    percentile: float | None = None
+    is_extrapolated: bool = False
+    error: str | None = None
+    plot_path: str | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    __table_args__ = (
+        UniqueConstraint(
+            "calculation_id",
+            "patient_id",
+            "structure",
+            name="unique_result_per_calc_patient_structure",
+        ),
+    )
+
+    # Relationships
+    calculation: OOSCalculation = Relationship(back_populates="results")

@@ -4,6 +4,7 @@ Calculation endpoints for GAMLSS modeling and percentile calculations.
 Provides endpoints for:
 - Fitting reference models with SSE progress updates
 - Calculating patient percentiles against fitted models (via file upload)
+- Retrieving persisted OOS calculation results and plots
 """
 
 import json
@@ -14,7 +15,7 @@ from typing import Annotated
 
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlmodel import Session
 
 from app.fastapi.db.database import get_session
@@ -23,15 +24,21 @@ from app.fastapi.dependencies import get_user_dataset, get_validated_files
 from app.fastapi.models.requests import ReferenceCalculationRequest
 from app.fastapi.models.responses import (
     ModelResult,
+    OOSCalculationDetailResponse,
+    OOSCalculationListResponse,
+    OOSCalculationSummary,
     PatientCalculationResponse,
     PatientResult,
     ReferenceCalculationResponse,
+    SavedPatientResult,
 )
 from app.fastapi.services.calculation import (
     CalculationProgress,
     CalculationService,
     ReferenceCalculationResult,
 )
+from app.fastapi.services.model_persistence import ModelPersistenceService
+from app.fastapi.services.oos_persistence import OOSPersistenceService
 from app.fastapi.services.reference_data import ReferenceDataService
 from app.fastapi.utils.file_utils import PatientDataProcessor, ValidatedFile
 
@@ -339,16 +346,20 @@ async def calculate_oos_percentiles(
     # Combine all DataFrames into one
     patient_df = pd.concat(dataframes, ignore_index=True)
 
+    source_filenames = ", ".join(f.name for f in files if f.name)
+
     logger.info(
         f"Processing {len(patient_df)} OOS patients for dataset {dataset.id} "
         f"(from {len(files)} files)"
     )
 
-    # Calculate percentiles
+    # Calculate and persist percentiles
     service = CalculationService(session)
-    calc_results = service.calculate_patient_percentiles(
+    calculation_id, calc_results = service.calculate_and_persist_patient_percentiles(
+        user_id=dataset.user_id,
         dataset_id=dataset.id,
         patient_data=patient_df,
+        source_filenames=source_filenames,
         structures=structures,
     )
 
@@ -383,8 +394,247 @@ async def calculate_oos_percentiles(
 
     return PatientCalculationResponse(
         message=f"Calculated percentiles for {patients_processed} patients",
+        calculation_id=calculation_id,
         results=results,
         patients_processed=patients_processed,
         structures_processed=structures_processed,
         errors=errors,
     )
+
+
+@router.get("/{dataset_id}/calculations")
+async def list_oos_calculations(
+    dataset: Annotated[ReferenceDataset, Depends(get_user_dataset)],
+    include_stale: bool = Query(False, description="Include stale calculations"),
+    session: Session = Depends(get_session),
+) -> OOSCalculationListResponse:
+    """
+    List saved OOS calculations for a dataset.
+
+    Parameters
+    ----------
+    dataset : ReferenceDataset
+        The validated dataset (injected via dependency).
+    include_stale : bool
+        Whether to include calculations marked stale after model re-fitting.
+    session : Session
+        Database session.
+
+    Returns
+    -------
+    OOSCalculationListResponse
+        List of calculation summaries.
+    """
+    oos_service = OOSPersistenceService(session)
+    calcs = oos_service.get_dataset_calculations(
+        dataset.id, include_stale=include_stale
+    )
+
+    summaries = []
+    for calc in calcs:
+        results = oos_service.get_calculation_results(calc.id)
+        summaries.append(
+            OOSCalculationSummary(
+                id=calc.id,
+                dataset_id=calc.dataset_id,
+                source_filenames=calc.source_filenames,
+                patients_count=len({r.patient_id for r in results}),
+                structures_count=len({r.structure for r in results}),
+                is_stale=calc.is_stale,
+                created_at=calc.created_at,
+            )
+        )
+
+    return OOSCalculationListResponse(
+        calculations=summaries,
+        total=len(summaries),
+    )
+
+
+@router.get("/{dataset_id}/calculations/{calculation_id}")
+async def get_oos_calculation(
+    dataset: Annotated[ReferenceDataset, Depends(get_user_dataset)],
+    calculation_id: int,
+    session: Session = Depends(get_session),
+) -> OOSCalculationDetailResponse:
+    """
+    Get results for a specific OOS calculation.
+
+    Parameters
+    ----------
+    dataset : ReferenceDataset
+        The validated dataset (injected via dependency).
+    calculation_id : int
+        The calculation ID.
+    session : Session
+        Database session.
+
+    Returns
+    -------
+    OOSCalculationDetailResponse
+        Full calculation details with per-patient results.
+
+    Raises
+    ------
+    HTTPException
+        404 if calculation not found or doesn't belong to dataset.
+    """
+    from app.fastapi.db.models import OOSCalculation
+
+    oos_service = OOSPersistenceService(session)
+    calc = session.get(OOSCalculation, calculation_id)
+    if calc is None or calc.dataset_id != dataset.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Calculation not found",
+        )
+
+    db_results = oos_service.get_calculation_results(calculation_id)
+
+    results = [
+        SavedPatientResult(
+            id=r.id,
+            calculation_id=r.calculation_id,
+            patient_id=r.patient_id,
+            structure=r.structure,
+            age=r.age,
+            value=r.value,
+            z_score=r.z_score,
+            percentile=r.percentile,
+            is_extrapolated=r.is_extrapolated,
+            error=r.error,
+            has_plot=r.plot_path is not None,
+        )
+        for r in db_results
+    ]
+
+    return OOSCalculationDetailResponse(
+        id=calc.id,
+        dataset_id=calc.dataset_id,
+        source_filenames=calc.source_filenames,
+        is_stale=calc.is_stale,
+        created_at=calc.created_at,
+        results=results,
+    )
+
+
+@router.get("/{dataset_id}/calculations/{calculation_id}/results/{result_id}/plot")
+async def get_oos_patient_plot(
+    dataset: Annotated[ReferenceDataset, Depends(get_user_dataset)],
+    calculation_id: int,
+    result_id: int,
+    session: Session = Depends(get_session),
+) -> FileResponse:
+    """
+    Serve the OOS patient plot PNG for a specific result.
+
+    Parameters
+    ----------
+    dataset : ReferenceDataset
+        The validated dataset (injected via dependency).
+    calculation_id : int
+        The calculation ID.
+    result_id : int
+        The result ID.
+    session : Session
+        Database session.
+
+    Returns
+    -------
+    FileResponse
+        The plot PNG file.
+
+    Raises
+    ------
+    HTTPException
+        404 if result or plot not found.
+    """
+    oos_service = OOSPersistenceService(session)
+    plot_path = oos_service.get_plot_path(result_id)
+    if plot_path is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Plot not found",
+        )
+    return FileResponse(plot_path, media_type="image/png")
+
+
+@router.get("/{dataset_id}/models/{structure}/reference-plot")
+async def get_reference_plot(
+    dataset: Annotated[ReferenceDataset, Depends(get_user_dataset)],
+    structure: str,
+    session: Session = Depends(get_session),
+) -> FileResponse:
+    """
+    Serve the reference percentile grid plot for a fitted model.
+
+    Parameters
+    ----------
+    dataset : ReferenceDataset
+        The validated dataset (injected via dependency).
+    structure : str
+        The brain structure name.
+    session : Session
+        Database session.
+
+    Returns
+    -------
+    FileResponse
+        The reference plot PNG file.
+
+    Raises
+    ------
+    HTTPException
+        404 if model or plot not found.
+    """
+    persistence_service = ModelPersistenceService(session)
+    plot_path = persistence_service.get_reference_plot_path(dataset.id, structure)
+    if plot_path is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Reference plot not found for structure '{structure}'",
+        )
+    return FileResponse(plot_path, media_type="image/png")
+
+
+@router.delete("/{dataset_id}/calculations/{calculation_id}")
+async def delete_oos_calculation(
+    dataset: Annotated[ReferenceDataset, Depends(get_user_dataset)],
+    calculation_id: int,
+    session: Session = Depends(get_session),
+) -> dict:
+    """
+    Delete an OOS calculation and its plot files.
+
+    Parameters
+    ----------
+    dataset : ReferenceDataset
+        The validated dataset (injected via dependency).
+    calculation_id : int
+        The calculation ID to delete.
+    session : Session
+        Database session.
+
+    Returns
+    -------
+    dict
+        Confirmation message.
+
+    Raises
+    ------
+    HTTPException
+        404 if calculation not found or doesn't belong to dataset.
+    """
+    from app.fastapi.db.models import OOSCalculation
+
+    calc = session.get(OOSCalculation, calculation_id)
+    if calc is None or calc.dataset_id != dataset.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Calculation not found",
+        )
+
+    oos_service = OOSPersistenceService(session)
+    oos_service.delete_calculation(dataset.user_id, calculation_id)
+
+    return {"message": f"Calculation {calculation_id} deleted"}

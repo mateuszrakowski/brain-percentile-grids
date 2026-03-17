@@ -10,6 +10,7 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import matplotlib.pyplot as plt
 from sqlmodel import Session, select
 
 if TYPE_CHECKING:
@@ -17,7 +18,7 @@ if TYPE_CHECKING:
 
 from app.core.engine.model import GAMLSS, FittedGAMLSSModel
 from app.fastapi.config import get_settings
-from app.fastapi.db.models import FittedModel
+from app.fastapi.db.models import FittedModel, OOSCalculation
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,22 @@ class ModelPersistenceService:
             Directory path for the dataset's models.
         """
         return self.models_dir / f"user_{user_id}" / f"dataset_{dataset_id}"
+
+    @staticmethod
+    def _save_figure_to_png(fig: plt.Figure, path: Path) -> None:
+        """
+        Save a matplotlib figure to PNG and close it.
+
+        Parameters
+        ----------
+        fig : plt.Figure
+            The figure to save.
+        path : Path
+            Destination file path.
+        """
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(str(path), dpi=150, bbox_inches="tight")
+        plt.close(fig)
 
     def _get_model_path(self, user_id: int, dataset_id: int, structure: str) -> Path:
         """
@@ -126,17 +143,29 @@ class ModelPersistenceService:
             )
         ).first()
 
+        # Generate reference plot
+        reference_plot_path: str | None = None
+        try:
+            fig = fitted_model.generate_grids()
+            plot_file = model_dir / f"{structure}_reference_plot.png"
+            self._save_figure_to_png(fig, plot_file)
+            reference_plot_path = str(plot_file)
+            logger.info(f"Saved reference plot for {structure}")
+        except Exception as e:
+            logger.warning(f"Could not generate reference plot for {structure}: {e}")
+
         if existing:
             # Update existing record
             existing.family = family
             existing.aic = fitted_model.aic
             existing.bic = fitted_model.bic
             existing.file_path = str(model_path)
+            existing.reference_plot_path = reference_plot_path
             self.session.add(existing)
             self.session.commit()
             self.session.refresh(existing)
             logger.info(f"Updated model for {structure} in dataset {dataset_id}")
-            return existing
+            db_record = existing
         else:
             # Create new record
             db_model = FittedModel(
@@ -146,12 +175,32 @@ class ModelPersistenceService:
                 aic=fitted_model.aic,
                 bic=fitted_model.bic,
                 file_path=str(model_path),
+                reference_plot_path=reference_plot_path,
             )
             self.session.add(db_model)
             self.session.commit()
             self.session.refresh(db_model)
             logger.info(f"Saved new model for {structure} in dataset {dataset_id}")
-            return db_model
+            db_record = db_model
+
+        # Mark all OOS calculations for this dataset as stale
+        stale_calcs = self.session.exec(
+            select(OOSCalculation).where(
+                OOSCalculation.dataset_id == dataset_id,
+                OOSCalculation.is_stale == False,  # noqa: E712
+            )
+        ).all()
+        for calc in stale_calcs:
+            calc.is_stale = True
+            self.session.add(calc)
+        if stale_calcs:
+            self.session.commit()
+            logger.info(
+                f"Marked {len(stale_calcs)} OOS calculations as stale "
+                f"for dataset {dataset_id}"
+            )
+
+        return db_record
 
     def load_model(
         self,
@@ -279,6 +328,34 @@ class ModelPersistenceService:
         self.delete_model_files(user_id, dataset_id)
 
         return len(models)
+
+    def get_reference_plot_path(self, dataset_id: int, structure: str) -> str | None:
+        """
+        Get the reference plot path for a fitted model.
+
+        Parameters
+        ----------
+        dataset_id : int
+            The dataset ID.
+        structure : str
+            The brain structure name.
+
+        Returns
+        -------
+        str | None
+            Path to the reference plot PNG, or None if not available.
+        """
+        db_model = self.session.exec(
+            select(FittedModel).where(
+                FittedModel.dataset_id == dataset_id,
+                FittedModel.structure == structure,
+            )
+        ).first()
+        if db_model is None or db_model.reference_plot_path is None:
+            return None
+        if not os.path.exists(db_model.reference_plot_path):
+            return None
+        return db_model.reference_plot_path
 
     def has_fitted_models(self, dataset_id: int) -> bool:
         """

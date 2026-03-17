@@ -18,6 +18,7 @@ from app.core.engine.model import GAMLSS, FittedGAMLSSModel
 from app.core.engine.selector import GAMLSSModelSelector
 from app.core.resources.model_candidates import get_all_model_candidates
 from app.fastapi.services.model_persistence import ModelPersistenceService
+from app.fastapi.services.oos_persistence import OOSPersistenceService
 from app.fastapi.services.reference_data import ReferenceDataService
 
 logger = logging.getLogger(__name__)
@@ -336,7 +337,7 @@ class CalculationService:
         dataset_id: int,
         patient_data: pd.DataFrame,
         structures: list[str] | None = None,
-    ) -> list[PatientPercentileResult]:
+    ) -> tuple[list[PatientPercentileResult], dict[str, FittedGAMLSSModel]]:
         """
         Calculate percentiles for out-of-sample patients.
 
@@ -354,19 +355,20 @@ class CalculationService:
 
         Returns
         -------
-        list[PatientPercentileResult]
-            List of percentile results for each patient-structure combination.
+        tuple[list[PatientPercentileResult], dict[str, FittedGAMLSSModel]]
+            Percentile results and the loaded models dict (for plot generation).
         """
-        results = []
+        results: list[PatientPercentileResult] = []
+        loaded_models: dict[str, FittedGAMLSSModel] = {}
 
         if patient_data.empty:
-            return results
+            return results, loaded_models
 
         # Get reference data for model loading
         ref_df = self._reference_service.get_reference_dataframe(dataset_id)
         if ref_df.empty:
             logger.error(f"No reference data found for dataset {dataset_id}")
-            return results
+            return results, loaded_models
 
         # Get available models
         available_models = self._persistence_service.get_dataset_models(dataset_id)
@@ -380,11 +382,9 @@ class CalculationService:
 
         if not structures:
             logger.warning(f"No fitted models found for dataset {dataset_id}")
-            return results
+            return results, loaded_models
 
-        # Load models and calculate percentiles
-        loaded_models: dict[str, FittedGAMLSSModel] = {}
-
+        # Load models
         for structure in structures:
             model = self._persistence_service.load_model(
                 dataset_id=dataset_id,
@@ -470,4 +470,110 @@ class CalculationService:
                         )
                     )
 
-        return results
+        return results, loaded_models
+
+    def calculate_and_persist_patient_percentiles(
+        self,
+        user_id: int,
+        dataset_id: int,
+        patient_data: pd.DataFrame,
+        source_filenames: str | None = None,
+        structures: list[str] | None = None,
+    ) -> tuple[int, list[PatientPercentileResult]]:
+        """
+        Calculate OOS percentiles and persist results with plots.
+
+        Creates an OOSCalculation record, computes z-scores/percentiles,
+        generates per-patient plots, and saves everything to DB and disk.
+
+        Parameters
+        ----------
+        user_id : int
+            The user ID (for file path organization).
+        dataset_id : int
+            The dataset ID to use models from.
+        patient_data : pd.DataFrame
+            DataFrame with patient data.
+        source_filenames : str | None
+            Comma-separated list of uploaded filenames.
+        structures : list[str] | None
+            Structures to calculate. If None, uses all available models.
+
+        Returns
+        -------
+        tuple[int, list[PatientPercentileResult]]
+            The calculation ID and list of results.
+        """
+        oos_service = OOSPersistenceService(self.session)
+
+        # Create calculation record
+        calc = oos_service.create_calculation(
+            dataset_id=dataset_id,
+            source_filenames=source_filenames,
+        )
+
+        # Compute percentiles + get loaded models
+        calc_results, loaded_models = self.calculate_patient_percentiles(
+            dataset_id=dataset_id,
+            patient_data=patient_data,
+            structures=structures,
+        )
+
+        # Pre-compute percentile curves per structure (reuse across patients)
+        percentile_curves_cache: dict[str, dict[float, np.ndarray]] = {}
+        for structure, model in loaded_models.items():
+            try:
+                percentile_curves_cache[structure] = model.calculate_percentiles()
+            except Exception as e:
+                logger.warning(
+                    f"Could not calculate percentile curves for {structure}: {e}"
+                )
+
+        # Save each result with optional plot
+        for r in calc_results:
+            plot_path: str | None = None
+
+            # Generate OOS plot if model and curves are available
+            model = loaded_models.get(r.structure)
+            curves = percentile_curves_cache.get(r.structure)
+            if (
+                model is not None
+                and curves is not None
+                and r.z_score is not None
+                and r.percentile is not None
+            ):
+                try:
+                    patient_df = pd.DataFrame(
+                        {self.X_COLUMN: [r.age], r.structure: [r.value]}
+                    )
+                    fig = model.plot_oos_patient(
+                        patient_df, curves, r.z_score, r.percentile
+                    )
+                    plot_path = oos_service.save_oos_plot(
+                        fig=fig,
+                        user_id=user_id,
+                        dataset_id=dataset_id,
+                        calculation_id=calc.id,
+                        patient_id=r.patient_id,
+                        structure=r.structure,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Could not generate OOS plot for "
+                        f"{r.patient_id}/{r.structure}: {e}"
+                    )
+
+            oos_service.save_result(
+                calculation_id=calc.id,
+                patient_id=r.patient_id,
+                structure=r.structure,
+                age=r.age,
+                value=r.value,
+                z_score=r.z_score,
+                percentile=r.percentile,
+                is_extrapolated=r.is_extrapolated,
+                error=r.error,
+                plot_path=plot_path,
+            )
+
+        return calc.id, calc_results

@@ -538,7 +538,7 @@ class TestCalculationService:
         calculate_service = CalculationService(test_session)
         monkeypatch.setattr(calculate_service, "_persistence_service", persistence_mock)
 
-        result = calculate_service.calculate_patient_percentiles(
+        result, loaded_models = calculate_service.calculate_patient_percentiles(
             test_reference_dataset.id,
             pd.DataFrame(
                 {
@@ -559,6 +559,7 @@ class TestCalculationService:
         assert result[0].value == 0.5
         assert result[0].z_score == 0.2
         assert result[0].percentile == 0.5
+        assert "hippo" in loaded_models
         model_mock.predict_patient_oos.assert_called_once()
 
     def test_calculate_patient_percentiles_empty_data(
@@ -566,12 +567,13 @@ class TestCalculationService:
     ):
         """Verify empty patient DataFrame returns no results."""
         service = CalculationService(test_session)
-        result = service.calculate_patient_percentiles(
+        result, loaded_models = service.calculate_patient_percentiles(
             test_reference_dataset.id,
             pd.DataFrame(),
         )
 
         assert result == []
+        assert loaded_models == {}
 
     def test_calculate_patient_percentiles_no_models(
         self, test_reference_dataset, monkeypatch, test_session
@@ -583,12 +585,13 @@ class TestCalculationService:
         service = CalculationService(test_session)
         monkeypatch.setattr(service, "_persistence_service", persistence_mock)
 
-        result = service.calculate_patient_percentiles(
+        result, loaded_models = service.calculate_patient_percentiles(
             test_reference_dataset.id,
             pd.DataFrame({"PatientID": ["p1"], "PatientAge": [25.0], "hippo": [0.5]}),
         )
 
         assert result == []
+        assert loaded_models == {}
 
     def test_calculate_patient_percentiles_model_not_loaded(
         self, test_reference_dataset, monkeypatch, test_session
@@ -610,7 +613,7 @@ class TestCalculationService:
         service = CalculationService(test_session)
         monkeypatch.setattr(service, "_persistence_service", persistence_mock)
 
-        result = service.calculate_patient_percentiles(
+        result, loaded_models = service.calculate_patient_percentiles(
             test_reference_dataset.id,
             pd.DataFrame({"PatientID": ["p1"], "PatientAge": [25.0], "hippo": [0.5]}),
             ["hippo"],
@@ -620,6 +623,7 @@ class TestCalculationService:
         assert result[0].error == "Model not loaded"
         assert result[0].z_score is None
         assert result[0].percentile is None
+        assert loaded_models == {}
 
     def test_calculate_patient_percentiles_prediction_exception(
         self, test_reference_dataset, monkeypatch, test_session
@@ -644,7 +648,7 @@ class TestCalculationService:
         service = CalculationService(test_session)
         monkeypatch.setattr(service, "_persistence_service", persistence_mock)
 
-        result = service.calculate_patient_percentiles(
+        result, loaded_models = service.calculate_patient_percentiles(
             test_reference_dataset.id,
             pd.DataFrame({"PatientID": ["p1"], "PatientAge": [25.0], "hippo": [0.5]}),
             ["hippo"],
