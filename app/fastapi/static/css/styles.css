@@ -621,6 +621,40 @@ img {
     font-size: var(--font-size-xs);
 }
 
+.table th.numeric {
+    text-align: right;
+}
+
+.table th.sortable {
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    padding-right: calc(var(--space-md) + 0.8em);
+}
+
+.table th.sortable::after {
+    content: '⇅';
+    position: absolute;
+    right: var(--space-sm);
+    opacity: 0.3;
+    font-size: 0.75em;
+}
+
+.table th.sortable.sort-asc::after {
+    content: '▲';
+    opacity: 0.7;
+}
+
+.table th.sortable.sort-desc::after {
+    content: '▼';
+    opacity: 0.7;
+}
+
+.table th.sortable:hover {
+    color: var(--color-primary);
+    background-color: var(--color-primary-light);
+}
+
 /* --------------------------------------------------------------------------
    Drag-and-Drop Upload Zone
    -------------------------------------------------------------------------- */

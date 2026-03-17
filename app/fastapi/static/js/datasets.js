@@ -114,28 +114,90 @@ async function showDatasetDetail(datasetId) {
     }
 }
 
+function splitPascalCase(name) {
+    return name.replace(/([a-z])([A-Z])|([A-Z])([A-Z][a-z])/g, '$1$3 $2$4');
+}
+
+function formatColumnHeader(col) {
+    if (col === 'patient_id') return 'Patient ID';
+    if (col === 'study_date') return 'Study Date';
+    if (col === 'patient_age') return 'Patient Age';
+    return splitPascalCase(col);
+}
+
+function isNumericColumn(col) {
+    return col !== 'patient_id' && col !== 'study_date';
+}
+
+let tableData = { columns: [], rows: [] };
+let sortState = { col: null, asc: true };
+
+function renderTableBody() {
+    const tbody = document.getElementById('detail-data-tbody');
+    const rows = [...tableData.rows];
+
+    if (sortState.col) {
+        const col = sortState.col;
+        const dir = sortState.asc ? 1 : -1;
+        rows.sort((a, b) => {
+            const va = a[col], vb = b[col];
+            if (va == null && vb == null) return 0;
+            if (va == null) return 1;
+            if (vb == null) return -1;
+            if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
+            return String(va).localeCompare(String(vb)) * dir;
+        });
+    }
+
+    tbody.innerHTML = rows.map(row =>
+        `<tr>${tableData.columns.map(col => {
+            const val = row[col];
+            if (val == null) return '<td>-</td>';
+            if (typeof val === 'number') return `<td class="numeric">${Number(val).toFixed(2)}</td>`;
+            return `<td>${escapeHtml(String(val))}</td>`;
+        }).join('')}</tr>`
+    ).join('');
+}
+
+function handleSort(col) {
+    if (sortState.col === col) {
+        sortState.asc = !sortState.asc;
+    } else {
+        sortState.col = col;
+        sortState.asc = true;
+    }
+
+    document.querySelectorAll('#detail-data-table th.sortable').forEach(th => {
+        th.classList.remove('sort-asc', 'sort-desc');
+        if (th.dataset.col === col) {
+            th.classList.add(sortState.asc ? 'sort-asc' : 'sort-desc');
+        }
+    });
+
+    renderTableBody();
+}
+
 async function loadDataTable(datasetId) {
     const container = document.getElementById('detail-data-table');
     try {
         const result = await api.data.getTable(datasetId);
+        tableData = result;
+        sortState = { col: null, asc: true };
+
         const table = container.querySelector('table');
 
-        // Build header
+        // Build sortable header with formatted names
         const thead = table.querySelector('thead tr');
-        thead.innerHTML = result.columns.map(col =>
-            `<th>${escapeHtml(col)}</th>`
-        ).join('');
+        thead.innerHTML = result.columns.map(col => {
+            const numClass = isNumericColumn(col) ? ' numeric' : '';
+            return `<th class="sortable${numClass}" data-col="${escapeHtml(col)}">${escapeHtml(formatColumnHeader(col))}</th>`;
+        }).join('');
 
-        // Build body
-        const tbody = document.getElementById('detail-data-tbody');
-        tbody.innerHTML = result.rows.map(row =>
-            `<tr>${result.columns.map(col => {
-                const val = row[col];
-                if (val == null) return '<td>-</td>';
-                if (typeof val === 'number') return `<td class="numeric">${Number(val).toFixed(2)}</td>`;
-                return `<td>${escapeHtml(String(val))}</td>`;
-            }).join('')}</tr>`
-        ).join('');
+        thead.querySelectorAll('th.sortable').forEach(th => {
+            th.addEventListener('click', () => handleSort(th.dataset.col));
+        });
+
+        renderTableBody();
     } catch (err) {
         showToast('Failed to load data table: ' + err.message, 'error');
     }
